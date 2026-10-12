@@ -125,6 +125,9 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     <button id="newBtn">New</button>
     <button id="dupBtn">Copy</button>
     <button id="delBtn">Delete</button>
+    <select id="showSel" aria-label="Show chords as">
+      <option value="asis">Chords as written</option><option value="letters">Show as letters</option><option value="numbers">Show as Nashville numbers</option>
+    </select>
     <select id="accSel" aria-label="Sharps or flats">
       <option value="auto">Auto ♯/♭</option><option value="sharp">Use ♯</option><option value="flat">Use ♭</option>
     </select>
@@ -182,7 +185,7 @@ var SAMPLE = [
 
 /* ---------- state ---------- */
 var songs = [], cur = null, steps = 0;
-var settings = { size:18, cols:false, chords:true, acc:'auto' };
+var settings = { size:18, cols:false, chords:true, acc:'auto', show:'asis' };
 
 try{ var s = JSON.parse(LS.get('csm.settings')||'null'); if(s) for(var k in s) settings[k]=s[k]; }catch(e){}
 try{ songs = JSON.parse(LS.get('csm.songs')||'[]'); }catch(e){ songs=[]; }
@@ -222,6 +225,40 @@ function useFlats(meta, text){
     }
   }
   return /\[[A-G]b/.test(text);
+}
+
+/* ---------- Nashville numbers <-> letters ---------- */
+var DEG=[0,2,4,5,7,9,11];
+var NUMSEMI=['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'];
+var CTX={mode:'asis',key:null,steps:0,flats:false};
+function keyIdx(meta){
+  var m=(meta.key||'').match(/^([A-G][#b]?)/);
+  return (m && IDX[m[1]]!==undefined) ? IDX[m[1]] : null;
+}
+function isNum(c){ return /^[#b]?[1-7]/.test(c); }
+function numSemi(a1,d,a2){
+  var a=a1||a2; return DEG[+d-1]+(a==='#'?1:a==='b'?-1:0);
+}
+function dispChord(c){
+  var m, k=CTX.key;
+  if(isNum(c)){
+    if(CTX.mode==='asis'||CTX.mode==='numbers'||k===null) return c;
+    m=c.match(/^([#b]?)([1-7])([#b]?)([^\/]*)(?:\/([#b]?)([1-7])([#b]?))?$/);
+    if(!m) return c;
+    var names=CTX.flats?FLAT:SHARP, base=k+CTX.steps+120;
+    var root=names[(base+numSemi(m[1],m[2],m[3]))%12];
+    var bass=m[6]?'/'+names[(base+numSemi(m[5],m[6],m[7]))%12]:'';
+    return root+m[4]+bass;
+  }
+  if(CTX.mode==='numbers'){
+    if(k===null) return c;
+    m=c.match(/^([A-G][#b]?)([^\/]*)(?:\/([A-G][#b]?))?$/);
+    if(!m) return c;
+    var r=NUMSEMI[(IDX[m[1]]-k+120)%12];
+    var b=m[3]?'/'+NUMSEMI[(IDX[m[3]]-k+120)%12]:'';
+    return r+m[2]+b;
+  }
+  return tChord(c,CTX.steps,CTX.flats);
 }
 
 /* ---------- ChordPro parser ---------- */
@@ -274,7 +311,7 @@ function renderLine(text, st, flats){
   var html=words.map(function(w){
     if(!w.length) return '';
     return '<span class="w">'+w.map(function(p){
-      var ch=p.chord?esc(tChord(p.chord,st,flats)):'&nbsp;';
+      var ch=p.chord?esc(dispChord(p.chord)):'&nbsp;';
       return '<span class="p"><span class="ch">'+ch+'</span><span class="ly">'+(esc(p.text)||'&nbsp;')+'</span></span>';
     }).join('')+'</span>';
   }).join('');
@@ -283,6 +320,7 @@ function renderLine(text, st, flats){
 
 function render(){
   var text=cur.text, song=parse(text), m=song.meta, flats=useFlats(m,text), h='';
+  CTX={mode:settings.show,key:keyIdx(m),steps:steps,flats:flats};
   var title=m.title||'Untitled';
   h+='<h1>'+esc(title)+'</h1>';
   if(m.subtitle) h+='<p class="sub">'+esc(m.subtitle)+'</p>';
@@ -297,6 +335,7 @@ function render(){
   if(m.time) bits.push('<span>Time <b>'+esc(m.time)+'</b></span>');
   if(bits.length) h+='<div class="meta">'+bits.join('')+'</div>';
 
+  if(settings.show!=='asis' && CTX.key===null) h+='<div class="note">To convert between letters and numbers, add a key line, for example {key: G}</div>';
   h+='<div id="body"'+(settings.cols?' class="cols2"':'')+'>';
   song.blocks.forEach(function(b){
     h+='<div class="sec '+b.type+'">';
@@ -403,6 +442,8 @@ $('delBtn').onclick=function(){
 };
 $('up').onclick=function(){ steps=(steps+1)%12; cur.steps=steps; render(); saveAll(); };
 $('down').onclick=function(){ steps=(steps+11)%12; cur.steps=steps; render(); saveAll(); };
+$('showSel').value=settings.show;
+$('showSel').onchange=function(){ settings.show=this.value; saveSettings(); render(); };
 $('accSel').value=settings.acc;
 $('accSel').onchange=function(){ settings.acc=this.value; saveSettings(); render(); };
 $('smaller').onclick=function(){ settings.size=Math.max(10,settings.size-1); saveSettings(); render(); };
@@ -436,6 +477,7 @@ $('help').onclick=function(){
 '{start_of_chorus} ... {end_of_chorus}\n'+
 '{start_of_bridge: Bridge} ... {end_of_bridge}\n'+
 '{comment: Play softly}\n'+
+'Nashville numbers: write 1, 4, 5, 6m ... in [brackets]; add {key: G}, then use "Show as" to switch.\n'+
 '# a line starting with # is ignored\n\n'+
 'Pasted a chart with chords on the line above the words? Tap "Convert pasted chords-over-lyrics".');
 };
