@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chord Sheets">
+<title>Chord Sheet Maker</title>
+<style>
+:root{
+  --bg:#f6f4ef; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#dcd8cf;
+  --accent:#1f5fbf; --chord:#b3261e; --btn:#ece9e1; --btn-ink:#1d1d1f;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#17171a; --panel:#1f1f23; --ink:#ececee; --muted:#9a9aa2; --line:#33333a;
+         --accent:#7aa7f0; --chord:#ff8a80; --btn:#2c2c33; --btn-ink:#ececee; }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  display:flex;flex-direction:column;
+  padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+button,select,input{font:inherit;color:var(--btn-ink)}
+button{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}
+button:active{filter:brightness(.92)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+select{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:40px;max-width:100%}
+label.chk{display:inline-flex;align-items:center;gap:6px;min-height:40px}
+
+header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:8px 10px;
+  padding-top:max(8px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row .grow{flex:1 1 160px;min-width:0}
+.keybox{display:inline-flex;align-items:center;gap:4px}
+.keybox output{min-width:3.2em;text-align:center;font-weight:700}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.tabs,.onlyphone{display:none}
+
+main{flex:1;min-height:0;display:flex}
+#editorPane,#sheetPane{flex:1 1 50%;min-width:0;min-height:0;overflow:auto}
+#editorPane{border-right:1px solid var(--line);display:flex;flex-direction:column}
+#editorTools{padding:8px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
+#src{flex:1;width:100%;border:0;outline:0;resize:none;padding:14px;background:var(--panel);color:var(--ink);
+  font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;tab-size:2}
+#sheetPane{padding:20px 22px 60px}
+#sheet{background:var(--panel);max-width:900px;margin:0 auto;padding:22px 26px;border-radius:10px;border:1px solid var(--line)}
+
+/* ---- the chord sheet itself ---- */
+#sheet h1{margin:0 0 2px;font-size:1.6em;line-height:1.2}
+#sheet .sub{color:var(--muted);margin:0}
+#sheet .meta{margin:8px 0 14px;font-size:.85em;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+#sheet .meta b{color:var(--ink)}
+#body.cols2{column-count:2;column-gap:36px}
+.sec{margin:0 0 1.1em;break-inside:avoid}
+.sec.chorus{border-left:3px solid var(--accent);padding-left:12px}
+.sec .lbl{font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:.25em}
+.ln{margin:0 0 .35em;line-height:1.25}
+.ln.plain{white-space:pre-wrap}
+.w{display:inline-block;white-space:nowrap;vertical-align:bottom}
+.p{display:inline-flex;flex-direction:column;vertical-align:bottom}
+.ch{color:var(--chord);font-weight:700;font-size:.88em;line-height:1.15;padding-right:.4em;white-space:pre}
+.ly{white-space:pre;line-height:1.3}
+.note{margin:.2em 0 .5em;padding:.3em .6em;background:var(--btn);border-radius:6px;font-style:italic;font-size:.92em}
+pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;overflow:auto}
+.nochords .ch{display:none}
+
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;
+  padding:10px 14px;border-radius:10px;display:none;gap:12px;align-items:center;z-index:9}
+#toast button{min-height:30px;padding:4px 10px}
+
+@media (max-width:800px){
+  .tabs{display:flex;gap:6px}
+  .onlyphone{display:inline-block}
+  .more{display:none}
+  header.bar.open .more{display:flex}
+  button,select{min-height:38px;padding:6px 10px;font-size:15px}
+  header.bar{gap:6px}
+  .tabs button{flex:1}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  main{display:block}
+  #editorPane,#sheetPane{height:100%;border:0}
+  body[data-view="edit"] #sheetPane{display:none}
+  body[data-view="sheet"] #editorPane{display:none}
+  #sheetPane{padding:10px 8px 60px}
+  #sheet{padding:14px 14px;border-radius:8px}
+  #body.cols2{column-count:1}
+  #src{font-size:16px} /* stops iOS zooming on focus */
+}
+
+@media print{
+  @page{margin:.6in}
+  html,body{height:auto;background:#fff;display:block}
+  header.bar,#editorPane,#toast{display:none!important}
+  main{display:block}
+  #sheetPane{overflow:visible;padding:0}
+  #sheet{border:0;padding:0;max-width:none;background:#fff;color:#000}
+  #sheet .sub,#sheet .meta{color:#444}
+  .ch{color:#000}
+  .sec.chorus{border-left-color:#000}
+  .sec .lbl{color:#000}
+  .note{background:#eee}
+}
+</style>
+</head>
+<body data-view="edit">
+
+<header class="bar">
+  <div class="row">
+    <select id="songSel" class="grow" aria-label="Song"></select>
+    <button id="moreBtn" class="onlyphone">More ▾</button>
+  </div>
+  <div class="row">
+    <span class="keybox">
+      <button id="down" aria-label="Transpose down">♭ −</button>
+      <output id="keyOut">Key</output>
+      <button id="up" aria-label="Transpose up">+ ♯</button>
+    </span>
+    <button id="smaller" aria-label="Smaller text">A−</button>
+    <button id="bigger" aria-label="Bigger text">A+</button>
+    <button id="printBtn" class="primary">Print / PDF</button>
+  </div>
+  <div class="row more" id="more">
+    <button id="newBtn">New</button>
+    <button id="dupBtn">Copy</button>
+    <button id="delBtn">Delete</button>
+    <select id="accSel" aria-label="Sharps or flats">
+      <option value="auto">Auto ♯/♭</option><option value="sharp">Use ♯</option><option value="flat">Use ♭</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="twoCol"> 2 columns</label>
+    <label class="chk"><input type="checkbox" id="showCh" checked> Chords</label>
+    <button id="expBtn">Export</button>
+    <button id="impBtn">Import</button>
+    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,text/plain" multiple hidden>
+  </div>
+  <div class="tabs">
+    <button id="tabEdit" class="on">Edit</button>
+    <button id="tabSheet">Sheet</button>
+  </div>
+</header>
+
+<main>
+  <section id="editorPane">
+    <div id="editorTools">
+      <button id="brk">[ ] chord</button>
+      <button id="conv" title="Turn pasted chords-over-lyrics (Ultimate Guitar style) into ChordPro">Convert pasted chords-over-lyrics</button>
+      <button id="help">Cheat sheet</button>
+    </div>
+    <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+  </section>
+  <section id="sheetPane"><article id="sheet"></article></section>
+</main>
+
+<div id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- storage (safe if blocked) ---------- */
+var LS = {
+  get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
+  set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+};
+
+var SAMPLE = [
+'{title: Amazing Grace}',
+'{subtitle: Public domain}',
+'{key: G}',
+'',
+'{start_of_verse: Verse 1}',
+'[G]Amazing [G7]grace, how [C]sweet the [G]sound',
+'That [G]saved a [Em]wretch like [D]me',
+'I [G]once was [G7]lost, but [C]now am [G]found',
+'Was [Em]blind, but [D]now I [G]see',
+'{end_of_verse}',
+'',
+'{comment: Tip: put each chord in [brackets] right where it lands in the word.}',
+''
+].join('\n');
+
+/* ---------- state ---------- */
+var songs = [], cur = null, steps = 0;
+var settings = { size:18, cols:false, chords:true, acc:'auto' };
+
+try{ var s = JSON.parse(LS.get('csm.settings')||'null'); if(s) for(var k in s) settings[k]=s[k]; }catch(e){}
+try{ songs = JSON.parse(LS.get('csm.songs')||'[]'); }catch(e){ songs=[]; }
+if(!Array.isArray(songs)) songs=[];
+if(!songs.length) songs=[{id:uid(), text:SAMPLE, steps:0}];
+var lastId = LS.get('csm.last');
+cur = songs.filter(function(x){return x.id===lastId})[0] || songs[0];
+
+function uid(){ return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function saveAll(){ LS.set('csm.songs', JSON.stringify(songs)); LS.set('csm.last', cur.id); }
+function saveSettings(){ LS.set('csm.settings', JSON.stringify(settings)); }
+
+/* ---------- music theory ---------- */
+var SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+var FLAT =['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+var IDX={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11};
+var FLAT_MAJ=[5,10,3,8,1,6], FLAT_MIN=[2,7,0,5,10,3];
+
+function tNote(n, st, flats){
+  var i=IDX[n]; if(i===undefined) return n;
+  return (flats?FLAT:SHARP)[((i+st)%12+12)%12];
+}
+function tChord(c, st, flats){
+  if(!st) return c;
+  var m=c.match(/^([A-G][#b]?)([^\/]*)(?:\/([A-G][#b]?))?$/);
+  if(!m) return c;
+  return tNote(m[1],st,flats)+m[2]+(m[3]?'/'+tNote(m[3],st,flats):'');
+}
+function useFlats(meta, text){
+  if(settings.acc==='flat') return true;
+  if(settings.acc==='sharp') return false;
+  if(meta.key){
+    var m=meta.key.match(/^([A-G][#b]?)(m|min)?/);
+    if(m && IDX[m[1]]!==undefined){
+      var i=((IDX[m[1]]+steps)%12+12)%12;
+      return (m[2]?FLAT_MIN:FLAT_MAJ).indexOf(i)>=0;
+    }
+  }
+  return /\[[A-G]b/.test(text);
+}
+
+/* ---------- ChordPro parser ---------- */
+var ALIAS={t:'title',st:'subtitle',su:'subtitle',c:'comment',ci:'comment',cb:'comment',comment_italic:'comment',comment_box:'comment',
+  soc:'start_of_chorus',eoc:'end_of_chorus',sov:'start_of_verse',eov:'end_of_verse',
+  sob:'start_of_bridge',eob:'end_of_bridge',sot:'start_of_tab',eot:'end_of_tab'};
+function parse(text){
+  var meta={}, blocks=[], blk=null;
+  function open(type,label,implicit){ blk={type:type,label:label||'',implicit:!!implicit,lines:[]}; blocks.push(blk); }
+  text.split(/\r?\n/).forEach(function(raw){
+    if(/^\s*#/.test(raw)) return;
+    var d=raw.match(/^\s*\{\s*([^:}\s]+)\s*:?\s*(.*?)\s*\}\s*$/);
+    if(d){
+      var n=d[1].toLowerCase(); n=ALIAS[n]||n; var v=d[2];
+      if(n==='comment'){ if(!blk||blk.implicit){ open('verse','',true); } blk.lines.push({note:v}); return; }
+      if(/^start_of_(chorus|verse|bridge|tab)$/.test(n)){ open(n.slice(9),v,false); return; }
+      if(/^end_of_/.test(n)){ blk=null; return; }
+      meta[n]=v; return;
+    }
+    if(raw.trim()===''){
+      if(blk && blk.implicit) blk=null;
+      else if(blk) blk.lines.push({blank:true});
+      return;
+    }
+    if(!blk) open('verse','',true);
+    blk.lines.push({text:raw});
+  });
+  return {meta:meta, blocks:blocks};
+}
+
+/* ---------- renderer ---------- */
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderLine(text, st, flats){
+  var parts=text.split(/\[([^\]]*)\]/), segs=[];
+  if(parts[0]!=='') segs.push({chord:'',text:parts[0]});
+  for(var i=1;i<parts.length;i+=2) segs.push({chord:parts[i],text:parts[i+1]||''});
+  if(!segs.some(function(s){return s.chord})) return '<div class="ln plain">'+(esc(text)||'&nbsp;')+'</div>';
+
+  // group into words so a line only wraps between words, never mid-word
+  var words=[[]];
+  segs.forEach(function(s){
+    var bits=s.text.split(/(\s+)/);
+    bits.forEach(function(b,i){
+      if(b===''&&i>0) return;
+      words[words.length-1].push({chord:i===0?s.chord:'',text:b});
+      if(i%2===1) words.push([]);
+    });
+  });
+  var html=words.map(function(w){
+    if(!w.length) return '';
+    return '<span class="w">'+w.map(function(p){
+      var ch=p.chord?esc(tChord(p.chord,st,flats)):'&nbsp;';
+      return '<span class="p"><span class="ch">'+ch+'</span><span class="ly">'+(esc(p.text)||'&nbsp;')+'</span></span>';
+    }).join('')+'</span>';
+  }).join('');
+  return '<div class="ln">'+html+'</div>';
+}
+
+function render(){
+  var text=cur.text, song=parse(text), m=song.meta, flats=useFlats(m,text), h='';
+  var title=m.title||'Untitled';
+  h+='<h1>'+esc(title)+'</h1>';
+  if(m.subtitle) h+='<p class="sub">'+esc(m.subtitle)+'</p>';
+  if(m.artist) h+='<p class="sub">'+esc(m.artist)+'</p>';
+  var bits=[];
+  if(m.key){
+    var k=tChord(m.key,steps,flats);
+    bits.push('<span>Key <b>'+esc(k)+'</b>'+(steps?' (original '+esc(m.key)+')':'')+'</span>');
+  }
+  if(m.capo) bits.push('<span>Capo <b>'+esc(m.capo)+'</b></span>');
+  if(m.tempo) bits.push('<span>Tempo <b>'+esc(m.tempo)+'</b></span>');
+  if(m.time) bits.push('<span>Time <b>'+esc(m.time)+'</b></span>');
+  if(bits.length) h+='<div class="meta">'+bits.join('')+'</div>';
+
+  h+='<div id="body"'+(settings.cols?' class="cols2"':'')+'>';
+  song.blocks.forEach(function(b){
+    h+='<div class="sec '+b.type+'">';
+    if(b.label) h+='<div class="lbl">'+esc(b.label)+'</div>';
+    if(b.type==='tab'){
+      h+='<pre class="tab">'+b.lines.map(function(l){return l.text===undefined?'':esc(l.text)}).join('\n')+'</pre>';
+    } else {
+      b.lines.forEach(function(l){
+        if(l.note!==undefined) h+='<div class="note">'+esc(l.note)+'</div>';
+        else if(l.blank) h+='<div class="ln">&nbsp;</div>';
+        else h+=renderLine(l.text,steps,flats);
+      });
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  var sheet=document.getElementById('sheet');
+  sheet.innerHTML=h;
+  sheet.style.fontSize=settings.size+'px';
+  sheet.classList.toggle('nochords',!settings.chords);
+  document.title=title+' – Chord Sheet';
+  document.getElementById('keyOut').textContent = m.key ? tChord(m.key,steps,flats) : (steps>0?'+':'')+steps;
+}
+
+/* ---------- song list ---------- */
+function titleOf(s){ var m=s.text.match(/\{\s*(?:title|t)\s*:\s*(.*?)\s*\}/i); return m?m[1]:'Untitled'; }
+function refreshList(){
+  var sel=document.getElementById('songSel');
+  sel.innerHTML=songs.map(function(s){return '<option value="'+s.id+'">'+esc(titleOf(s))+'</option>'}).join('');
+  sel.value=cur.id;
+}
+function select(id){
+  cur=songs.filter(function(s){return s.id===id})[0]||songs[0];
+  steps=cur.steps||0;
+  document.getElementById('src').value=cur.text;
+  refreshList(); render(); saveAll();
+}
+
+/* ---------- toast ---------- */
+var toastFn=null, toastTimer=null;
+function toast(msg, undoFn){
+  var t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg;
+  var b=document.getElementById('toastBtn');
+  b.style.display=undoFn?'':'none'; toastFn=undoFn;
+  t.style.display='flex'; clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.style.display='none'}, 6000);
+}
+document.getElementById('toastBtn').onclick=function(){
+  if(toastFn) toastFn(); document.getElementById('toast').style.display='none';
+};
+
+/* ---------- chords-over-lyrics converter ---------- */
+var CHORD_RE=/^[A-G][#b]?(?:maj|min|m|M|dim|aug|sus|add|\+|-)?[0-9]*(?:(?:sus|add|maj|dim|aug|b|#)?[0-9]+)*(?:\/[A-G][#b]?)?$/;
+function isChordLine(l){
+  var t=l.trim().split(/\s+/);
+  return l.trim()!=='' && t.every(function(x){return CHORD_RE.test(x)});
+}
+function convertOver(text){
+  var lines=text.split(/\r?\n/), out=[];
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i];
+    if(isChordLine(l)){
+      var nx=lines[i+1];
+      if(nx!==undefined && nx.trim()!=='' && !isChordLine(nx) && !/^\s*\{/.test(nx)){
+        var re=/\S+/g, m, hits=[];
+        while((m=re.exec(l))) hits.push({i:m.index,c:m[0]});
+        var lyric=nx;
+        for(var h=hits.length-1;h>=0;h--){
+          while(lyric.length<hits[h].i) lyric+=' ';
+          lyric=lyric.slice(0,hits[h].i)+'['+hits[h].c+']'+lyric.slice(hits[h].i);
+        }
+        out.push(lyric.replace(/\s+$/,'')); i++;
+      } else {
+        out.push(l.trim().split(/\s+/).map(function(c){return '['+c+']'}).join(' '));
+      }
+    } else out.push(l);
+  }
+  return out.join('\n');
+}
+
+/* ---------- wiring ---------- */
+var src=document.getElementById('src');
+function $(id){return document.getElementById(id)}
+
+src.addEventListener('input',function(){
+  cur.text=src.value; cur.steps=steps; render(); saveAll();
+  var o=$('songSel').querySelector('option[value="'+cur.id+'"]'); if(o) o.textContent=titleOf(cur);
+});
+$('songSel').onchange=function(){ select(this.value); };
+$('newBtn').onclick=function(){
+  var s={id:uid(), text:'{title: New Song}\n{key: }\n\n', steps:0};
+  songs.push(s); cur=s; select(s.id); setView('edit'); src.focus();
+};
+$('dupBtn').onclick=function(){
+  var s={id:uid(), text:cur.text.replace(/(\{\s*(?:title|t)\s*:\s*)(.*?)(\s*\})/i,'$1$2 (copy)$3'), steps:steps};
+  songs.push(s); select(s.id);
+};
+$('delBtn').onclick=function(){
+  if(!confirm('Delete "'+titleOf(cur)+'" from this device?')) return;
+  songs=songs.filter(function(s){return s.id!==cur.id});
+  if(!songs.length) songs=[{id:uid(),text:'{title: New Song}\n\n',steps:0}];
+  select(songs[0].id);
+};
+$('up').onclick=function(){ steps=(steps+1)%12; cur.steps=steps; render(); saveAll(); };
+$('down').onclick=function(){ steps=(steps+11)%12; cur.steps=steps; render(); saveAll(); };
+$('accSel').value=settings.acc;
+$('accSel').onchange=function(){ settings.acc=this.value; saveSettings(); render(); };
+$('smaller').onclick=function(){ settings.size=Math.max(10,settings.size-1); saveSettings(); render(); };
+$('bigger').onclick=function(){ settings.size=Math.min(40,settings.size+1); saveSettings(); render(); };
+$('twoCol').checked=settings.cols;
+$('twoCol').onchange=function(){ settings.cols=this.checked; saveSettings(); render(); };
+$('showCh').checked=settings.chords;
+$('showCh').onchange=function(){ settings.chords=this.checked; saveSettings(); render(); };
+$('printBtn').onclick=function(){ render(); window.print(); };
+
+$('brk').onclick=function(){
+  var a=src.selectionStart,b=src.selectionEnd,v=src.value;
+  if(b>a){ src.value=v.slice(0,a)+'['+v.slice(a,b)+']'+v.slice(b); src.setSelectionRange(b+2,b+2); }
+  else { src.value=v.slice(0,a)+'[]'+v.slice(a); src.setSelectionRange(a+1,a+1); }
+  src.focus(); src.dispatchEvent(new Event('input'));
+};
+$('conv').onclick=function(){
+  var before=src.value, after=convertOver(before);
+  if(after===before){ toast('Nothing to convert — no chord lines found.'); return; }
+  src.value=after; src.dispatchEvent(new Event('input'));
+  toast('Converted.', function(){ src.value=before; src.dispatchEvent(new Event('input')); });
+};
+$('help').onclick=function(){
+  alert(
+'CHORDPRO CHEAT SHEET\n\n'+
+'Chords go in [brackets] right where they fall:\n'+
+'  [G]Amazing [C]grace   Hal[C]le[G]lujah\n\n'+
+'{title: Song name}   {subtitle: ...}   {artist: ...}\n'+
+'{key: G}   {capo: 2}   {tempo: 72}\n'+
+'{start_of_verse: Verse 1} ... {end_of_verse}\n'+
+'{start_of_chorus} ... {end_of_chorus}\n'+
+'{start_of_bridge: Bridge} ... {end_of_bridge}\n'+
+'{comment: Play softly}\n'+
+'# a line starting with # is ignored\n\n'+
+'Pasted a chart with chords on the line above the words? Tap "Convert pasted chords-over-lyrics".');
+};
+
+/* import / export */
+$('impBtn').onclick=function(){ $('impFile').click(); };
+$('impFile').onchange=function(){
+  var files=[].slice.call(this.files), n=0;
+  if(!files.length) return;
+  files.forEach(function(f){
+    var r=new FileReader();
+    r.onload=function(){
+      var t=String(r.result);
+      if(!/\{\s*(title|t)\s*:/i.test(t)) t='{title: '+f.name.replace(/\.[^.]+$/,'')+'}\n'+t;
+      var s={id:uid(),text:t,steps:0}; songs.push(s); cur=s; n++;
+      if(n===files.length){ select(cur.id); toast('Imported '+n+' file'+(n>1?'s':'')+'.'); }
+    };
+    r.readAsText(f);
+  });
+  this.value='';
+};
+$('expBtn').onclick=function(){
+  var name=(titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song';
+  var blob=new Blob([cur.text],{type:'text/plain'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.cho';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+};
+
+/* phone: Edit / Sheet tabs */
+function setView(v){
+  document.body.setAttribute('data-view',v);
+  $('tabEdit').classList.toggle('on',v==='edit');
+  $('tabSheet').classList.toggle('on',v==='sheet');
+}
+$('moreBtn').onclick=function(){ document.querySelector('header.bar').classList.toggle('open'); };
+$('tabEdit').onclick=function(){ setView('edit'); };
+$('tabSheet').onclick=function(){ setView('sheet'); };
+
+/* offline support: a tiny service worker keeps a copy of this page (needs https hosting) */
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  navigator.serviceWorker.register('chords-sw.js?p='+encodeURIComponent(location.pathname))
+    .then(function(){ return navigator.serviceWorker.ready; })
+    .then(function(){
+      if(!LS.get('csm.offlineMsg')){ LS.set('csm.offlineMsg','1'); toast('Saved on this device. It now works offline.'); }
+    })
+    .catch(function(){});
+}
+
+select(cur.id);
+if(window.matchMedia('(max-width:800px)').matches && songs.length>1) setView('sheet');
+})();
+</script>
+</body>
+</html>
