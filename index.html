@@ -93,10 +93,13 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
   @page{margin:.6in}
   html,body{height:auto;background:#fff;display:block}
   header.bar,#editorPane,#toast{display:none!important}
-  main{display:block}
-  #sheetPane{overflow:visible;padding:0}
+  main{display:block!important}
+  /* print area counts as "narrow", so undo the phone-view rules that hide the sheet */
+  body[data-view] #sheetPane,#sheetPane{display:block!important;height:auto!important;overflow:visible!important;padding:0!important}
+  #body.cols2{column-count:2!important}
   #sheet{border:0;padding:0;max-width:none;background:#fff;color:#000}
   #sheet .sub,#sheet .meta{color:#444}
+  #sheet .meta b,#sheet .ly,#sheet h1,#sheet .note{color:#000}
   .ch{color:#000}
   .sec.chorus{border-left-color:#000}
   .sec .lbl{color:#000}
@@ -452,6 +455,9 @@ $('twoCol').checked=settings.cols;
 $('twoCol').onchange=function(){ settings.cols=this.checked; saveSettings(); render(); };
 $('showCh').checked=settings.chords;
 $('showCh').onchange=function(){ settings.chords=this.checked; saveSettings(); render(); };
+var viewBeforePrint=null;
+window.addEventListener('beforeprint',function(){ viewBeforePrint=document.body.getAttribute('data-view'); render(); });
+window.addEventListener('afterprint',function(){ if(viewBeforePrint) document.body.setAttribute('data-view',viewBeforePrint); });
 $('printBtn').onclick=function(){ render(); window.print(); };
 
 $('brk').onclick=function(){
