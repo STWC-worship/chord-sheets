@@ -122,7 +122,8 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     </span>
     <button id="smaller" aria-label="Smaller text">A−</button>
     <button id="bigger" aria-label="Bigger text">A+</button>
-    <button id="printBtn" class="primary">Print / PDF</button>
+    <button id="pdfBtn" class="primary">Save PDF</button>
+    <button id="printBtn">Print</button>
   </div>
   <div class="row more" id="more">
     <button id="newBtn">New</button>
@@ -487,6 +488,131 @@ $('help').onclick=function(){
 '# a line starting with # is ignored\n\n'+
 'Pasted a chart with chords on the line above the words? Tap "Convert pasted chords-over-lyrics".');
 };
+
+
+/* ---------- Save PDF (works where the print dialog does not, e.g. iPhone Home Screen apps) ---------- */
+var WIN1252={'’':0x92,'‘':0x91,'“':0x93,'”':0x94,'–':0x96,'—':0x97,'…':0x85,'•':0x95,'©':0xa9};
+function latin(str){
+  var o='';
+  for(var i=0;i<str.length;i++){
+    var c=str.charCodeAt(i);
+    if(c<128||(c>=160&&c<=255)) o+=str.charAt(i);
+    else if(WIN1252[str.charAt(i)]!==undefined) o+=String.fromCharCode(WIN1252[str.charAt(i)]);
+    else if(str.charAt(i)==='♭') o+='b';
+    else if(str.charAt(i)==='♯') o+='#';
+    else o+='?';
+  }
+  return o;
+}
+function pdfStr(str){ return latin(str).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
+
+function pairStrings(text){
+  var parts=text.split(/\[([^\]]*)\]/), segs=[], i;
+  if(parts[0]!=='') segs.push({chord:'',text:parts[0]});
+  for(i=1;i<parts.length;i+=2) segs.push({chord:parts[i],text:parts[i+1]||''});
+  var chords='', lyric='';
+  segs.forEach(function(sg,idx){
+    while(chords.length<lyric.length) chords+=' ';
+    if(sg.chord) chords+=dispChord(sg.chord);
+    lyric+=sg.text;
+    if(idx<segs.length-1 && lyric.length<chords.length+1){ while(lyric.length<chords.length+1) lyric+=' '; }
+  });
+  return {chords:chords.replace(/\s+$/,''), lyric:lyric.replace(/\s+$/,''), has:segs.some(function(x){return x.chord})};
+}
+function wrapPair(c,l,w){
+  var out=[];
+  while(l.length>w || c.length>w){
+    var b=l.lastIndexOf(' ',w);
+    if(b<=0) b=w;
+    out.push([c.slice(0,b).replace(/\s+$/,''), l.slice(0,b).replace(/\s+$/,'')]);
+    c=c.slice(b+1); l=l.slice(b+1);
+  }
+  out.push([c.replace(/\s+$/,''), l.replace(/\s+$/,'')]);
+  return out;
+}
+
+function buildPdf(){
+  render();                                   // refresh CTX (key, transpose, display mode)
+  var song=parse(cur.text), m=song.meta;
+  var fs=Math.max(8,Math.min(15,Math.round(settings.size*0.62)));
+  var PW=612, PH=792, MG=54, cw=0.6*fs, cols=Math.floor((PW-2*MG)/cw);
+  var pages=[[]], y=PH-MG-fs;
+  function room(h){ if(y-h<MG){ pages.push([]); y=PH-MG-fs; } }
+  function text(font,size,str){ pages[pages.length-1].push('BT /'+font+' '+size+' Tf '+MG+' '+y.toFixed(1)+' Td ('+pdfStr(str)+') Tj ET'); }
+
+  room(fs*3); text('F2',fs+6,m.title||'Untitled'); y-=fs*1.9;
+  var subs=[m.subtitle,m.artist].filter(Boolean).join('  -  ');
+  if(subs){ text('F1',fs,subs); y-=fs*1.4; }
+  var bits=[];
+  if(m.key) bits.push('Key '+tChord(m.key,steps,CTX.flats));
+  if(m.capo) bits.push('Capo '+m.capo);
+  if(m.tempo) bits.push('Tempo '+m.tempo);
+  if(m.time) bits.push('Time '+m.time);
+  if(bits.length){ text('F3',fs-1,bits.join('   ')); y-=fs*1.5; }
+  y-=fs*0.5;
+
+  song.blocks.forEach(function(b){
+    room(fs*4);
+    if(b.label){ text('F2',fs-1,b.label.toUpperCase()); y-=fs*1.4; }
+    b.lines.forEach(function(l){
+      if(l.note!==undefined){
+        wrapPair('',l.note,cols).forEach(function(r){ room(fs*1.4); text('F3',fs,r[1]); y-=fs*1.4; });
+      } else if(l.blank){ y-=fs*0.8; }
+      else if(b.type==='tab'){ room(fs*1.3); text('F1',fs,l.text||''); y-=fs*1.3; }
+      else {
+        var p=pairStrings(l.text), showCh=settings.chords && p.has;
+        if(!p.has){ wrapPair('',p.lyric,cols).forEach(function(r){ room(fs*1.4); text('F1',fs,r[1]); y-=fs*1.4; }); return; }
+        wrapPair(p.chords,p.lyric,cols).forEach(function(r){
+          var drawCh=showCh && r[0].trim()!=='';
+          room(fs*(drawCh?2.7:1.4));
+          if(drawCh){ text('F2',fs,r[0]); y-=fs*1.15; }
+          text('F1',fs,r[1]); y-=fs*1.5;
+        });
+      }
+    });
+    y-=fs*0.9;
+  });
+
+  /* assemble the PDF file */
+  var objs=[], n=pages.length;
+  objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  var kids=[]; for(var i=0;i<n;i++) kids.push((6+i*2)+' 0 R');
+  objs[2]='<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+n+' >>';
+  objs[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>';
+  objs[4]='<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>';
+  objs[5]='<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique /Encoding /WinAnsiEncoding >>';
+  pages.forEach(function(ops,i){
+    var content=ops.join('\n');
+    objs[6+i*2]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents '+(7+i*2)+' 0 R >>';
+    objs[7+i*2]='<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream';
+  });
+  var out='%PDF-1.4\n', offs=[];
+  for(var k=1;k<objs.length;k++){ offs[k]=out.length; out+=k+' 0 obj\n'+objs[k]+'\nendobj\n'; }
+  var xref=out.length;
+  out+='xref\n0 '+objs.length+'\n0000000000 65535 f \n';
+  for(k=1;k<objs.length;k++) out+=('0000000000'+offs[k]).slice(-10)+' 00000 n \n';
+  out+='trailer\n<< /Size '+objs.length+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  var bytes=new Uint8Array(out.length);
+  for(i=0;i<out.length;i++) bytes[i]=out.charCodeAt(i)&255;
+  return bytes;
+}
+function savePdf(){
+  var bytes;
+  try{ bytes=buildPdf(); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
+  var name=(titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song';
+  var blob=new Blob([bytes],{type:'application/pdf'});
+  var file=null;
+  try{ file=new File([blob],name+'.pdf',{type:'application/pdf'}); }catch(e){}
+  if(file && navigator.canShare && navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:name}).catch(function(){});
+    return;
+  }
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.pdf';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+  toast('PDF saved to your Downloads.');
+}
+$('pdfBtn').onclick=savePdf;
 
 /* import / export */
 $('impBtn').onclick=function(){ $('impFile').click(); };
