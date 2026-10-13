@@ -26,6 +26,7 @@ button,select,input{font:inherit;color:var(--btn-ink)}
 button{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}
 button:active{filter:brightness(.92)}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
 input[type=search]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;min-width:0;color:var(--ink)}
 select{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:40px;max-width:100%}
 label.chk{display:inline-flex;align-items:center;gap:6px;min-height:40px}
@@ -56,7 +57,7 @@ main{flex:1;min-height:0;display:flex}
 #body.cols2{column-count:2;column-gap:36px}
 .sec{margin:0 0 1.1em;break-inside:avoid}
 .sec.chorus{border-left:3px solid var(--accent);padding-left:12px}
-.sec .lbl{font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:.25em}
+.sec .lbl{font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--label,var(--accent));font-weight:700;margin-bottom:.25em}
 .ln{margin:0 0 .35em;line-height:1.25}
 .ln.plain{white-space:pre-wrap}
 .w{display:inline-block;white-space:nowrap;vertical-align:bottom}
@@ -67,6 +68,17 @@ main{flex:1;min-height:0;display:flex}
 pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;overflow:auto}
 .nochords .ch{display:none}
 
+dialog#legend{overflow:hidden;border:1px solid var(--line);border-radius:12px;padding:0;max-width:640px;width:calc(100% - 24px);max-height:86vh;background:var(--panel);color:var(--ink)}
+dialog#legend::backdrop{background:rgba(0,0,0,.45)}
+dialog#legend .lg{padding:18px 20px 22px;overflow:auto;max-height:86vh}
+dialog#legend h2{margin:0 0 4px;font-size:1.25em}
+dialog#legend h3{margin:18px 0 4px;font-size:1em;color:var(--accent)}
+dialog#legend p{margin:4px 0}
+dialog#legend .lead{color:var(--muted)}
+dialog#legend pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0;overflow:auto;font:13.5px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
+dialog#legend code{background:var(--bg);padding:1px 5px;border-radius:4px}
+dialog#legend ul{margin:6px 0 0;padding-left:20px}
+dialog#legend li{margin:5px 0}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;
   padding:10px 14px;border-radius:10px;display:none;gap:12px;align-items:center;z-index:9}
 #toast button{min-height:30px;padding:4px 10px}
@@ -101,9 +113,9 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
   #sheet{border:0;padding:0;max-width:none;background:#fff;color:#000}
   #sheet .sub,#sheet .meta{color:#444}
   #sheet .meta b,#sheet .ly,#sheet h1,#sheet .note{color:#000}
-  .ch{color:#000}
+  .ch{color:var(--chord-print,#000)}
   .sec.chorus{border-left-color:#000}
-  .sec .lbl{color:#000}
+  .sec .lbl{color:var(--label-print,#000)}
   .note{background:#eee}
 }
 </style>
@@ -141,6 +153,9 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     <label class="chk"><input type="checkbox" id="showCh" checked> Chords</label>
     <button id="libBtn" title="Search a whole folder of songs without importing them. Option-click to choose a different folder.">Open library folder</button>
     <input type="file" id="libInput" webkitdirectory directory multiple hidden>
+    <label class="chk" title="Colour of the chords">Chords <input type="color" id="chordColor" value="#b3261e" aria-label="Chord colour"></label>
+    <label class="chk" title="Colour of Verse / Chorus headings">Headings <input type="color" id="labelColor" value="#1f5fbf" aria-label="Heading colour"></label>
+    <button id="colorReset" title="Back to the default colours">Reset colours</button>
     <button id="bothBtn">Save .cho + PDF</button>
     <button id="expBtn">Export .cho</button>
     <button id="impBtn">Import</button>
@@ -157,13 +172,67 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     <div id="editorTools">
       <button id="brk">[ ] chord</button>
       <button id="conv" title="Turn pasted chords-over-lyrics (Ultimate Guitar style) into ChordPro">Convert pasted chords-over-lyrics</button>
-      <button id="help">Cheat sheet</button>
+      <button id="help">Legend (how to type)</button>
     </div>
     <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
   </section>
   <section id="sheetPane"><article id="sheet"></article></section>
 </main>
 
+<dialog id="legend">
+  <div class="lg">
+    <h2>Legend: how to type a song</h2>
+    <p class="lead">You only need to know a few things. Everything else is optional.</p>
+
+    <h3>1. Chords go in square brackets</h3>
+    <p>Put the chord right before the word (or the sound) it belongs on.</p>
+    <pre>[G]Amazing [C]grace, how [G]sweet the [D]sound
+Hal[C]le[G]lujah</pre>
+
+    <h3>2. Name each part by typing its name on its own line</h3>
+    <p>Type one of these words alone on a line. The app makes it a heading. No start or end code needed.</p>
+    <pre>Verse 1:
+Chorus:
+Bridge:
+Pre-Chorus:
+Intro:    Outro:    Tag:    Interlude:</pre>
+    <p>A part runs until the next heading. Leave a blank line for a gap.</p>
+
+    <h3>3. Song details go in curly braces at the top</h3>
+    <pre>{title: Amazing Grace}
+{artist: John Newton}
+{key: G}
+{capo: 2}</pre>
+
+    <h3>4. A note for the band</h3>
+    <pre>{comment: Play softly}
+{comment: Repeat x2}</pre>
+
+    <h3>5. A note just for you (hidden)</h3>
+    <pre># this line does not show on the sheet</pre>
+
+    <h3>The long way (you can skip this)</h3>
+    <p>Start and end codes also work. They are the same as typing the heading.</p>
+    <pre>{start_of_verse: Verse 1}  ...  {end_of_verse}
+{start_of_chorus}  ...  {end_of_chorus}
+{start_of_bridge: Bridge}  ...  {end_of_bridge}
+short forms:  {sov} {eov}   {soc} {eoc}   {sob} {eob}</pre>
+
+    <h3>Number charts (1 4 5 6m)</h3>
+    <p>Type the numbers in brackets, like <code>[1]</code> <code>[4]</code> <code>[6m]</code>, and add <code>{key: G}</code>. Use the "Chords as written" menu to show letters or numbers.</p>
+
+    <h3>Buttons in plain words</h3>
+    <ul>
+      <li><b>[ ] chord</b>: puts a pair of brackets where your cursor is. If you highlight a word first, it wraps the word.</li>
+      <li><b>Convert pasted chords-over-lyrics</b>: paste a chart where chords sit above the words, then tap this.</li>
+      <li><b>♭ − / + ♯</b>: change the key.  <b>A− / A+</b>: smaller / bigger text.</li>
+      <li><b>Save PDF</b>: makes a PDF.  <b>Save .cho + PDF</b>: saves both files.</li>
+      <li><b>Import</b>: opens .cho, .txt, .docx, .rtf or .pdf files.</li>
+      <li><b>Open library folder</b>: search a whole folder of songs without importing them.</li>
+    </ul>
+    <p><button id="legendClose" class="primary">Close</button></p>
+  </div>
+</dialog>
 <div id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
 
 <script>
@@ -194,7 +263,7 @@ var SAMPLE = [
 
 /* ---------- state ---------- */
 var songs = [], cur = null, steps = 0;
-var settings = { size:18, cols:false, chords:true, acc:'auto', show:'asis' };
+var settings = { size:18, cols:false, chords:true, acc:'auto', show:'asis', chordColor:null, labelColor:null };
 
 try{ var s = JSON.parse(LS.get('csm.settings')||'null'); if(s) for(var k in s) settings[k]=s[k]; }catch(e){}
 try{ songs = JSON.parse(LS.get('csm.songs')||'[]'); }catch(e){ songs=[]; }
@@ -275,8 +344,16 @@ function dispChord(c){
   return tChord(c,CTX.steps,CTX.flats);
 }
 
+function applyColors(){
+  var r=document.documentElement.style;
+  if(settings.chordColor){ r.setProperty('--chord',settings.chordColor); r.setProperty('--chord-print',settings.chordColor); }
+  else { r.removeProperty('--chord'); r.removeProperty('--chord-print'); }
+  if(settings.labelColor){ r.setProperty('--label',settings.labelColor); r.setProperty('--label-print',settings.labelColor); }
+  else { r.removeProperty('--label'); r.removeProperty('--label-print'); }
+}
+
 /* ---------- ChordPro parser ---------- */
-var ALIAS={t:'title',st:'subtitle',su:'subtitle',c:'comment',ci:'comment',cb:'comment',comment_italic:'comment',comment_box:'comment',
+var ALIAS={sob:'start_of_bridge',eob:'end_of_bridge',t:'title',st:'subtitle',su:'subtitle',c:'comment',ci:'comment',cb:'comment',comment_italic:'comment',comment_box:'comment',
   soc:'start_of_chorus',eoc:'end_of_chorus',sov:'start_of_verse',eov:'end_of_verse',
   sob:'start_of_bridge',eob:'end_of_bridge',sot:'start_of_tab',eot:'end_of_tab'};
 function parse(text){
@@ -291,6 +368,12 @@ function parse(text){
       if(/^start_of_(chorus|verse|bridge|tab)$/.test(n)){ open(n.slice(9),v,false); return; }
       if(/^end_of_/.test(n)){ blk=null; return; }
       meta[n]=v; return;
+    }
+    var sm=raw.match(SEC_RE);
+    if(sm){
+      var nm=sm[1].charAt(0).toUpperCase()+sm[1].slice(1).toLowerCase(), lbl=(nm+(sm[2]?' '+sm[2]:'')).replace('Prechorus','Pre-Chorus');
+      open(nm.toLowerCase()==='chorus'?'chorus':(nm.toLowerCase()==='bridge'?'bridge':'verse'), lbl, false);
+      return;
     }
     if(raw.trim()===''){
       if(blk && blk.implicit) blk=null;
@@ -489,6 +572,15 @@ $('delBtn').onclick=function(){
 };
 $('up').onclick=function(){ steps=(steps+1)%12; cur.steps=steps; render(); saveAll(); };
 $('down').onclick=function(){ steps=(steps+11)%12; cur.steps=steps; render(); saveAll(); };
+applyColors();
+if(settings.chordColor) $('chordColor').value=settings.chordColor;
+if(settings.labelColor) $('labelColor').value=settings.labelColor;
+$('chordColor').oninput=function(){ settings.chordColor=this.value; saveSettings(); applyColors(); };
+$('labelColor').oninput=function(){ settings.labelColor=this.value; saveSettings(); applyColors(); };
+$('colorReset').onclick=function(){
+  settings.chordColor=null; settings.labelColor=null; saveSettings(); applyColors();
+  $('chordColor').value='#b3261e'; $('labelColor').value='#1f5fbf';
+};
 $('showSel').value=settings.show;
 $('showSel').onchange=function(){ settings.show=this.value; saveSettings(); render(); };
 $('accSel').value=settings.acc;
@@ -517,20 +609,11 @@ $('conv').onclick=function(){
   toast('Converted.', function(){ src.value=before; src.dispatchEvent(new Event('input')); });
 };
 $('help').onclick=function(){
-  alert(
-'CHORDPRO CHEAT SHEET\n\n'+
-'Chords go in [brackets] right where they fall:\n'+
-'  [G]Amazing [C]grace   Hal[C]le[G]lujah\n\n'+
-'{title: Song name}   {subtitle: ...}   {artist: ...}\n'+
-'{key: G}   {capo: 2}   {tempo: 72}\n'+
-'{start_of_verse: Verse 1} ... {end_of_verse}\n'+
-'{start_of_chorus} ... {end_of_chorus}\n'+
-'{start_of_bridge: Bridge} ... {end_of_bridge}\n'+
-'{comment: Play softly}\n'+
-'Nashville numbers: write 1, 4, 5, 6m ... in [brackets]; add {key: G}, then use "Show as" to switch.\n'+
-'# a line starting with # is ignored\n\n'+
-'Pasted a chart with chords on the line above the words? Tap "Convert pasted chords-over-lyrics".');
+  var d=$('legend');
+  if(d.showModal) d.showModal(); else d.setAttribute('open','');
 };
+$('legendClose').onclick=function(){ var d=$('legend'); if(d.close) d.close(); else d.removeAttribute('open'); };
+$('legend').addEventListener('click',function(e){ if(e.target===this && this.close) this.close(); });
 
 
 /* ---------- Save PDF (works where the print dialog does not, e.g. iPhone Home Screen apps) ---------- */
