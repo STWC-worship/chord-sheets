@@ -27,6 +27,13 @@ button{background:var(--btn);border:1px solid var(--line);border-radius:8px;padd
 button:active{filter:brightness(.92)}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+header.bar{position:relative;z-index:30}
+.menuwrap{position:relative;display:inline-block}
+#exportMenu{position:absolute;top:calc(100% + 6px);left:0;min-width:250px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;z-index:50}
+#exportMenu[hidden]{display:none}
+#exportMenu button{display:flex;flex-direction:column;align-items:flex-start;width:100%;background:none;border:0;border-radius:8px;padding:9px 12px;text-align:left;min-height:0}
+#exportMenu button:hover,#exportMenu button:focus{background:var(--btn)}
+#exportMenu small{color:var(--muted);font-size:.8em;margin-top:1px}
 input[type=search]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;min-width:0;color:var(--ink)}
 select{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:40px;max-width:100%}
 label.chk{display:inline-flex;align-items:center;gap:6px;min-height:40px}
@@ -136,8 +143,22 @@ dialog#legend li{margin:5px 0}
     </span>
     <button id="smaller" aria-label="Smaller text">A−</button>
     <button id="bigger" aria-label="Bigger text">A+</button>
-    <button id="pdfBtn" class="primary">Save PDF</button>
-    <button id="printBtn">Print</button>
+    <span class="menuwrap">
+      <button id="exportBtn" class="primary" aria-haspopup="true" aria-expanded="false">Export ▾</button>
+      <div id="exportMenu" role="menu" hidden>
+        <button data-act="pdfBtn" role="menuitem"><b>PDF</b><small>colors included</small></button>
+        <button data-act="jpgBtn" role="menuitem"><b>Picture (JPG)</b><small>for upload forms</small></button>
+        <button data-act="pngBtn" role="menuitem"><b>Picture (PNG)</b><small>sharper text</small></button>
+        <button data-act="expBtn" role="menuitem"><b>ChordPro file (.cho)</b><small>for keeping and sharing</small></button>
+        <button data-act="bothBtn" role="menuitem"><b>.cho + PDF together</b><small>one tap, both files</small></button>
+        <button data-act="printBtn" role="menuitem"><b>Print…</b><small>your printer or Save as PDF</small></button>
+      </div>
+    </span>
+    <span hidden>
+      <button id="pdfBtn" type="button">Save PDF</button><button id="printBtn" type="button">Print</button>
+      <button id="jpgBtn" type="button">JPG</button><button id="pngBtn" type="button">PNG</button>
+      <button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
+    </span>
   </div>
   <div class="row more" id="more">
     <button id="newBtn">New</button>
@@ -156,8 +177,6 @@ dialog#legend li{margin:5px 0}
     <label class="chk" title="Colour of the chords">Chords <input type="color" id="chordColor" value="#b3261e" aria-label="Chord colour"></label>
     <label class="chk" title="Colour of Verse / Chorus headings">Headings <input type="color" id="labelColor" value="#1f5fbf" aria-label="Heading colour"></label>
     <button id="colorReset" title="Back to the default colours">Reset colours</button>
-    <button id="bothBtn">Save .cho + PDF</button>
-    <button id="expBtn">Export .cho</button>
     <button id="impBtn">Import</button>
     <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
   </div>
@@ -237,7 +256,7 @@ short forms:  {sov} {eov}   {soc} {eoc}   {sob} {eob}</pre>
       <li><b>[ ] chord</b>: puts a pair of brackets where your cursor is. If you highlight a word first, it wraps the word.</li>
       <li><b>Convert pasted chords-over-lyrics</b>: paste a chart where chords sit above the words, then tap this.</li>
       <li><b>♭ − / + ♯</b>: change the key.  <b>A− / A+</b>: smaller / bigger text.</li>
-      <li><b>Save PDF</b>: makes a PDF.  <b>Save .cho + PDF</b>: saves both files.</li>
+      <li><b>Export ▾</b>: everything you can save, in one menu: PDF, picture (JPG or PNG), the .cho file, .cho + PDF together, or Print. Use JPG for places that only take a picture.</li>
       <li><b>Import</b>: opens .cho, .txt, .docx, .rtf or .pdf files.</li>
       <li><b>Open library folder</b>: search a whole folder of songs without importing them.</li>
     </ul>
@@ -1225,6 +1244,144 @@ async function fileToCho(file){
   }
   throw new Error('unsupported');
 }
+
+
+/* ---------- Save as a picture (JPG / PNG) ---------- */
+function sheetToCanvas(){
+  render();                                           // refresh key, transpose and number/letter mode
+  var song=parse(cur.text), m=song.meta;
+  var CHORD=settings.chordColor||'#b3261e', LABEL=settings.labelColor||'#1f5fbf';
+  var FONT='"Helvetica Neue", Helvetica, Arial, sans-serif';
+  var W=1700, M=110, CW=W-2*M, H=6000, scales=[2.2,1.8,1.5,1.25,1.05], out=null;
+  for(var si=0; si<scales.length && !out; si++){
+    var fs=Math.max(22,Math.round(settings.size*scales[si]));
+    var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    var g=cv.getContext('2d'); g.fillStyle='#ffffff'; g.fillRect(0,0,W,H);
+    g.textBaseline='alphabetic';
+    var y=M, ok=true;                                 // y = top of the next line
+    var setF=function(weight,size,style){ g.font=(style||'')+' '+(weight||'400')+' '+size+'px '+FONT; };
+    var wid=function(t,weight,size,style){ setF(weight,size,style); return g.measureText(t).width; };
+    var txt=function(t,x,yy,color,weight,size,style){ setF(weight,size,style); g.fillStyle=color; g.fillText(t,x,yy); };
+    var line=function(t,color,weight,size,style,gap){        // one plain line, then advance
+      var base=y+size; txt(t,M,base,color,weight,size,style); y=base+size*(gap===undefined?0.45:gap);
+    };
+    var wrapPlain=function(t,weight,size,style){
+      var words=t.split(' '), rows=[], cur2='';
+      words.forEach(function(w){
+        var trial=cur2?cur2+' '+w:w;
+        if(cur2 && wid(trial,weight,size,style)>CW){ rows.push(cur2); cur2=w; } else cur2=trial;
+      });
+      rows.push(cur2); return rows;
+    };
+    line(m.title||'Untitled','#111111','700',fs*1.5,'',0.35);
+    var subs=[m.subtitle,m.artist].filter(Boolean).join('  -  ');
+    if(subs) line(subs,'#555555','400',fs*0.85,'',0.4);
+    var bits=[];
+    if(m.key) bits.push('Key '+tChord(m.key,steps,CTX.flats));
+    if(m.capo) bits.push('Capo '+m.capo);
+    if(m.tempo) bits.push('Tempo '+m.tempo);
+    if(m.time) bits.push('Time '+m.time);
+    if(bits.length) line(bits.join('     '),'#555555','400',fs*0.8,'',0.4);
+    y+=fs*0.6;
+
+    song.blocks.forEach(function(b){
+      var startY=y;
+      if(b.label) line(b.label.toUpperCase(),LABEL,'700',fs*0.62,'',0.9);
+      b.lines.forEach(function(l){
+        if(l.note!==undefined){
+          wrapPlain(l.note,'400',fs*0.9,'italic').forEach(function(r){ line(r,'#444444','400',fs*0.9,'italic',0.5); });
+          return;
+        }
+        if(l.blank){ y+=fs*0.7; return; }
+        if(b.type==='tab'){ var tb=y+fs; g.font='400 '+(fs*0.85)+'px ui-monospace, Menlo, monospace'; g.fillStyle='#111'; g.fillText(l.text||'',M,tb); y=tb+fs*0.4; return; }
+        var parts=l.text.split(/\[([^\]]*)\]/), segs=[], i;
+        if(parts[0]!=='') segs.push({chord:'',text:parts[0]});
+        for(i=1;i<parts.length;i+=2) segs.push({chord:parts[i],text:parts[i+1]||''});
+        var hasAny=segs.some(function(x){return x.chord});
+        var has=settings.chords && hasAny;
+        if(!hasAny){
+          wrapPlain(l.text,'400',fs).forEach(function(r){ line(r,'#111111','400',fs,'',0.4); });
+          return;
+        }
+        // group into words so a row only breaks between words
+        var words=[[]];
+        segs.forEach(function(sg){
+          sg.text.split(/(\s+)/).forEach(function(bt,ix){
+            if(bt===''&&ix>0) return;
+            words[words.length-1].push({chord:ix===0?sg.chord:'',text:bt});
+            if(ix%2===1) words.push([]);
+          });
+        });
+        var rows=[[]], rowW=0;
+        words.forEach(function(w){
+          if(!w.length) return;
+          var ww=0;
+          w.forEach(function(p){
+            var tw=wid(p.text,'400',fs), cw=(has&&p.chord)?wid(dispChord(p.chord),'700',fs*0.88)+fs*0.35:0;
+            p.w=Math.max(tw,cw); ww+=p.w;
+          });
+          if(rowW+ww>CW && rows[rows.length-1].length){ rows.push([]); rowW=0; }
+          rows[rows.length-1].push(w); rowW+=ww;
+        });
+        rows.forEach(function(row){
+          var anyChord=has && row.some(function(w){return w.some(function(p){return p.chord})});
+          var chordBase=y+fs*0.88, lyricBase=anyChord?chordBase+fs*1.12:y+fs;
+          var x=M;
+          row.forEach(function(w){
+            w.forEach(function(p){
+              if(has && p.chord) txt(dispChord(p.chord),x,chordBase,CHORD,'700',fs*0.88);
+              txt(p.text,x,lyricBase,'#111111','400',fs);
+              x+=p.w;
+            });
+          });
+          y=lyricBase+fs*0.4;
+        });
+      });
+      if(b.type==='chorus'){ g.fillStyle=LABEL; g.fillRect(M-34,startY,7,Math.max(0,y-startY-fs*0.15)); }
+      y+=fs*0.7;
+      if(y>H-M) ok=false;
+    });
+    if(ok && y<H-M){
+      var h=Math.max(Math.ceil(y+M*0.5),900);
+      out=document.createElement('canvas'); out.width=W; out.height=h;
+      var og=out.getContext('2d'); og.fillStyle='#fff'; og.fillRect(0,0,W,h); og.drawImage(cv,0,0);
+    }
+  }
+  if(!out) throw new Error('song is too long for one picture');
+  return out;
+}
+function saveImage(kind){
+  var cv;
+  try{ cv=sheetToCanvas(); }catch(e){ toast('Could not make the picture: '+e.message); return; }
+  var name=safeName(), type=kind==='png'?'image/png':'image/jpeg', ext=kind==='png'?'.png':'.jpg';
+  cv.toBlob(function(blob){
+    if(!blob){ toast('Could not make the picture.'); return; }
+    var file=null;
+    try{ file=new File([blob],name+ext,{type:type}); }catch(e){}
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:name}).catch(function(){});
+      return;
+    }
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+ext;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    toast('Saved '+name+ext+' to your Downloads.');
+  }, type, 0.92);
+}
+$('exportBtn').onclick=function(e){
+  e.stopPropagation();
+  var m=$('exportMenu'), open=m.hidden;
+  m.hidden=!open; this.setAttribute('aria-expanded',open?'true':'false');
+};
+$('exportMenu').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-act]'); if(!b) return;
+  this.hidden=true; $('exportBtn').setAttribute('aria-expanded','false');
+  $(b.getAttribute('data-act')).click();
+});
+document.addEventListener('click',function(){ $('exportMenu').hidden=true; });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') $('exportMenu').hidden=true; });
+$('jpgBtn').onclick=function(){ saveImage('jpg'); };
+$('pngBtn').onclick=function(){ saveImage('png'); };
 
 /* import / export */
 $('impBtn').onclick=function(){ $('impFile').click(); };
