@@ -26,6 +26,7 @@ button,select,input{font:inherit;color:var(--btn-ink)}
 button{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}
 button:active{filter:brightness(.92)}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+input[type=search]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;min-width:0;color:var(--ink)}
 select{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:40px;max-width:100%}
 label.chk{display:inline-flex;align-items:center;gap:6px;min-height:40px}
 
@@ -111,6 +112,7 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
 
 <header class="bar">
   <div class="row">
+    <input id="songSearch" class="grow" type="search" placeholder="Search songs" aria-label="Search songs" autocomplete="off" autocapitalize="off">
     <select id="songSel" class="grow" aria-label="Song"></select>
     <button id="moreBtn" class="onlyphone">More ▾</button>
   </div>
@@ -128,7 +130,7 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
   <div class="row more" id="more">
     <button id="newBtn">New</button>
     <button id="dupBtn">Copy</button>
-    <button id="delBtn">Delete</button>
+    <button id="delBtn">Remove</button>
     <select id="showSel" aria-label="Show chords as">
       <option value="asis">Chords as written</option><option value="letters">Show as letters</option><option value="numbers">Show as Nashville numbers</option>
     </select>
@@ -137,7 +139,8 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     </select>
     <label class="chk"><input type="checkbox" id="twoCol"> 2 columns</label>
     <label class="chk"><input type="checkbox" id="showCh" checked> Chords</label>
-    <button id="expBtn">Export</button>
+    <button id="bothBtn">Save .cho + PDF</button>
+    <button id="expBtn">Export .cho</button>
     <button id="impBtn">Import</button>
     <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,text/plain" multiple hidden>
   </div>
@@ -168,7 +171,7 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
 /* ---------- storage (safe if blocked) ---------- */
 var LS = {
   get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
-  set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+  set:function(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
 };
 
 var SAMPLE = [
@@ -199,7 +202,12 @@ var lastId = LS.get('csm.last');
 cur = songs.filter(function(x){return x.id===lastId})[0] || songs[0];
 
 function uid(){ return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function saveAll(){ LS.set('csm.songs', JSON.stringify(songs)); LS.set('csm.last', cur.id); }
+var warnedFull=false;
+function saveAll(){
+  var ok=LS.set('csm.songs', JSON.stringify(songs)); LS.set('csm.last', cur.id);
+  if(!ok && !warnedFull){ warnedFull=true; toast('This device is out of room for songs. Export what you need, then use Remove on the rest.'); }
+  if(ok) warnedFull=false;
+}
 function saveSettings(){ LS.set('csm.settings', JSON.stringify(settings)); }
 
 /* ---------- music theory ---------- */
@@ -367,9 +375,12 @@ function render(){
 /* ---------- song list ---------- */
 function titleOf(s){ var m=s.text.match(/\{\s*(?:title|t)\s*:\s*(.*?)\s*\}/i); return m?m[1]:'Untitled'; }
 function refreshList(){
-  var sel=document.getElementById('songSel');
-  sel.innerHTML=songs.map(function(s){return '<option value="'+s.id+'">'+esc(titleOf(s))+'</option>'}).join('');
+  var sel=$('songSel'), q=($('songSearch').value||'').trim().toLowerCase();
+  var list=songs.filter(function(x){ return !q || titleOf(x).toLowerCase().indexOf(q)>=0 || x.id===cur.id; });
+  list.sort(function(a,b){ return titleOf(a).toLowerCase()<titleOf(b).toLowerCase()?-1:1; });
+  sel.innerHTML=list.map(function(x){return '<option value="'+x.id+'">'+esc(titleOf(x))+'</option>'}).join('');
   sel.value=cur.id;
+  $('songSearch').placeholder='Search '+songs.length+' song'+(songs.length===1?'':'s');
 }
 function select(id){
   cur=songs.filter(function(s){return s.id===id})[0]||songs[0];
@@ -439,10 +450,12 @@ $('dupBtn').onclick=function(){
   songs.push(s); select(s.id);
 };
 $('delBtn').onclick=function(){
-  if(!confirm('Delete "'+titleOf(cur)+'" from this device?')) return;
-  songs=songs.filter(function(s){return s.id!==cur.id});
+  if(!confirm('Remove "'+titleOf(cur)+'" from this device?\n\nYour exported .cho and PDF files are not affected.')) return;
+  var removed=cur, at=songs.indexOf(cur);
+  songs=songs.filter(function(x){return x.id!==removed.id});
   if(!songs.length) songs=[{id:uid(),text:'{title: New Song}\n\n',steps:0}];
-  select(songs[0].id);
+  select(songs[Math.min(at,songs.length-1)].id);
+  toast('Removed "'+titleOf(removed)+'".', function(){ songs.splice(at,0,removed); select(removed.id); });
 };
 $('up').onclick=function(){ steps=(steps+1)%12; cur.steps=steps; render(); saveAll(); };
 $('down').onclick=function(){ steps=(steps+11)%12; cur.steps=steps; render(); saveAll(); };
@@ -613,6 +626,37 @@ function savePdf(){
   toast('PDF saved to your Downloads.');
 }
 $('pdfBtn').onclick=savePdf;
+
+$('songSearch').oninput=function(){ refreshList(); };
+$('songSearch').onkeydown=function(e){
+  if(e.key==='Enter'){
+    var first=$('songSel').options[0]; var q=this.value.trim();
+    if(first && q){ select(first.value); this.blur(); }
+  }
+};
+function safeName(){ return (titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song'; }
+function saveBoth(){
+  var name=safeName(), pdfBytes;
+  try{ pdfBytes=buildPdf(); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
+  var chof=null, pdff=null;
+  try{
+    chof=new File([cur.text],name+'.cho',{type:'text/plain'});
+    pdff=new File([new Blob([pdfBytes],{type:'application/pdf'})],name+'.pdf',{type:'application/pdf'});
+  }catch(e){}
+  if(chof && pdff && navigator.canShare && navigator.canShare({files:[chof,pdff]})){
+    navigator.share({files:[chof,pdff],title:name}).catch(function(){});
+    return;
+  }
+  [[new Blob([cur.text],{type:'text/plain'}),name+'.cho'],[new Blob([pdfBytes],{type:'application/pdf'}),name+'.pdf']].forEach(function(p,i){
+    setTimeout(function(){
+      var a=document.createElement('a'); a.href=URL.createObjectURL(p[0]); a.download=p[1];
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    }, i*400);
+  });
+  toast('Saved '+name+'.cho and '+name+'.pdf to Downloads.');
+}
+$('bothBtn').onclick=saveBoth;
 
 /* import / export */
 $('impBtn').onclick=function(){ $('impFile').click(); };
