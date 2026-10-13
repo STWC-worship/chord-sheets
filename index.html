@@ -144,7 +144,7 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     <button id="bothBtn">Save .cho + PDF</button>
     <button id="expBtn">Export .cho</button>
     <button id="impBtn">Import</button>
-    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,text/plain" multiple hidden>
+    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,text/plain" multiple hidden>
   </div>
   <div class="tabs">
     <button id="tabEdit" class="on">Edit</button>
@@ -757,22 +757,325 @@ $('libInput').onchange=function(){
   this.value='';
 };
 
+/* ---------- Word (.docx) and PDF import -> ChordPro ---------- */
+var CHORD_RE=/^(?:[A-G][#b]?(?:maj|min|m|M|dim|aug|sus|add|\+|-)?[0-9]*(?:(?:sus|add|maj|dim|aug|b|#)?[0-9]+)*(?:\/[A-G][#b]?)?|\/[A-G][#b]?)$/;
+var NASH_RE=/^[1-7][#b]?(?:m|M|sus|dim|aug|[0-9])*(?:\/[1-7][#b]?)?$/;
+var SEC_RE=/^\s*[\[(]?\s*(verse|chorus|bridge|pre-?chorus|intro|outro|tag|interlude|ending|instrumental|refrain|turnaround)\s*(\d*)\s*[\])]?\s*:?\s*$/i;
+var CREDIT_RE=/(©|\(c\)|copyright|ccli|all rights reserved|written by|words (?:and|&) music|music (?:and|&) lyrics|lyrics by|music by|words by|arr(?:\.|anged)? by|\b(?:19|20)\d\d\b.*(?:music|publishing|records|worship|ministries|songs|integrity|vineyard|hillsong|bethel))/i;
+var META_RE=/^(key|tempo|bpm|capo|time|ccli)\s*[:#]/i;
+var INLINE_RE=/\s*\(\s*((?:[A-G][#b]?[^\s()]*\s*)+)\)\s*$/;
+var nashDoc=false;
+function tokClean(x){ return x.replace(/^[(!.,;:]+|[)!.,;:]+$/g,''); }
+function lineText(L){ return L.map(function(c){return c.c}).join(''); }
+function isChordLine(txt){
+  var t=txt.split(/\s+/).map(tokClean).filter(Boolean);
+  if(!t.length) return false;
+  if(t.every(function(x){return CHORD_RE.test(x)})) return true;
+  if(t.every(function(x){return CHORD_RE.test(x)||NASH_RE.test(x)}) && t.some(function(x){return NASH_RE.test(x)})){
+    var verseNums=t.every(function(x){return /^[1-9]$/.test(x)});
+    if((t.length>=2 && !verseNums) || nashDoc) return true;
+  }
+  return false;
+}
+function prescan(lines){
+  var letters=0, digits=0;
+  lines.forEach(function(L){
+    var t=lineText(L).split(/\s+/).map(tokClean).filter(Boolean);
+    if(!t.length) return;
+    if(t.every(function(x){return CHORD_RE.test(x)})) letters++;
+    else if(t.every(function(x){return /^[1-7]$/.test(x)}) || (t.length>=2 && t.every(function(x){return NASH_RE.test(x)}))) digits++;
+  });
+  nashDoc = digits>=4 && letters<=Math.floor(digits/3);
+}
+// lines: [[{c,x0,x1},...],...]  ->  array of strings with [chords] inline
+function mergeLines(lines){
+  var out=[], i=0;
+  while(i<lines.length){
+    var L=lines[i], txt=lineText(L);
+    if(txt.trim() && isChordLine(txt.trim())){
+      var nxt=lines[i+1], ntxt=nxt?lineText(nxt):'';
+      if(nxt && ntxt.trim() && !isChordLine(ntxt.trim()) && !SEC_RE.test(ntxt)){
+        var toks=[], k=0;
+        while(k<L.length){
+          if(!L[k].c.trim()){ k++; continue; }
+          var st=k; while(k<L.length && L[k].c.trim()) k++;
+          toks.push([tokClean(lineText(L.slice(st,k))), L[st].x0]);
+        }
+        var ins={};
+        toks.forEach(function(t){
+          if(!t[0]) return;
+          var cx=t[1], j=nxt.length;
+          for(var idx=0; idx<nxt.length; idx++){
+            var c=nxt[idx];
+            if(cx<c.x1){ var w=Math.max(c.x1-c.x0,0.1); j=(cx<=c.x0+0.5*w)?idx:idx+1; break; }
+          }
+          (ins[j]=ins[j]||[]).push(t[0]);
+        });
+        var s='';
+        for(var q=0;q<nxt.length;q++){
+          (ins[q]||[]).forEach(function(t){ s+='['+t+']'; });
+          s+=(nxt[q].c==='\t'?' ':nxt[q].c);
+        }
+        (ins[nxt.length]||[]).forEach(function(t){ s+='['+t+']'; });
+        out.push(s.replace(/\s+$/,'')); i+=2; continue;
+      }
+      out.push(txt.trim().split(/\s+/).map(function(t){return '['+tokClean(t)+']'}).join(' ')); i++; continue;
+    }
+    out.push(txt.replace(/\s+$/,'')); i++;
+  }
+  return out;
+}
+function snapChords(l){
+  if(l.charAt(0)==='{' || l.indexOf('[')<0) return l;
+  var VOW='aeiouAEIOU';
+  return l.replace(/(^|[^\w'’\]])([A-Za-z])\[([^\]]+)\](?=[A-Za-z])([A-Za-z'’]*)/g, function(all,pre,letter,chord,rest){
+    if(VOW.indexOf(letter)>=0 && rest.length+1>=4) return all;
+    return pre+'['+chord+']'+letter+rest;
+  });
+}
+function linesToCho(lines, fallback){
+  prescan(lines);
+  var body=mergeLines(lines);
+  while(body.length && !body[0].trim()) body.shift();
+  var meta=[], title=fallback, artist=null, key=null;
+  if(body.length){
+    var b0=body[0].trim(), first;
+    if(SEC_RE.test(b0) || b0.indexOf('[')>=0 || b0.length>70 || /[,;]$/.test(b0) || isChordLine(b0)) first=fallback;
+    else first=body.shift().trim();
+    var m=first.match(/^(.*?),?\s+by\s+(.+)$/i);
+    if(m){ title=m[1].trim(); artist=m[2].trim(); } else title=first;
+  }
+  var taken=0;
+  while(body.length && body[0].trim() && taken<3 && body[0].indexOf('[')<0 && !SEC_RE.test(body[0]) && !isChordLine(body[0])){
+    var h=body[0].trim(), kk=h.match(/^key\s*:\s*(.+)$/i), a=h.match(/^(?:words\s*(?:&|and)\s*music\s*)?by\s+(.+)$/i);
+    if(kk) key=kk[1].trim();
+    else if(a && !artist) artist=a[1].trim();
+    else if(META_RE.test(h) || CREDIT_RE.test(h) || /^(intro|instrumental|interlude|turnaround|ending)\b/i.test(h)) meta.push(h);
+    else break;
+    body.shift(); taken++;
+  }
+  var out=['{title: '+title+'}'];
+  if(artist) out.push('{artist: '+artist+'}');
+  if(key) out.push('{key: '+key+'}');
+  var headMeta=meta.filter(function(x){return !CREDIT_RE.test(x)}), footMeta=meta.filter(function(x){return CREDIT_RE.test(x)});
+  headMeta.forEach(function(x){ out.push('{comment: '+x+'}'); });
+  var open=null;
+  function close(){ if(open){ out.push('{end_of_'+open+'}'); open=null; } }
+  var footer=footMeta.map(function(x){return '{comment: '+x+'}'});
+  body.forEach(function(l){
+    var s=l.match(SEC_RE);
+    if(s){
+      close();
+      var name=s[1].charAt(0).toUpperCase()+s[1].slice(1).toLowerCase(), num=s[2];
+      var label=(name+(num?' '+num:'')).replace('Prechorus','Pre-Chorus');
+      var typ=name.toLowerCase()==='chorus'?'chorus':(name.toLowerCase()==='bridge'?'bridge':'verse');
+      if(out.length && out[out.length-1]!=='') out.push('');
+      out.push('{start_of_'+typ+': '+label+'}'); open=typ; return;
+    }
+    var im=l.match(INLINE_RE);
+    if(im && l.slice(0,im.index).trim()){
+      l=l.slice(0,im.index)+'  '+im[1].trim().split(/\s+/).map(function(c){return '['+c+']'}).join(' ');
+    }
+    if(l.indexOf('[')<0 && CREDIT_RE.test(l) && l.trim().length>0 && l.trim().length<110){ footer.push('{comment: '+l.trim()+'}'); return; }
+    out.push(snapChords(l));
+  });
+  close();
+  while(out.length && out[out.length-1]==='') out.pop();
+  var seen={}; footer=footer.filter(function(x){ if(seen[x]) return false; seen[x]=1; return true; });
+  if(footer.length) out=out.concat([''],footer);
+  return out.join('\n').replace(/\n{3,}/g,'\n\n')+'\n';
+}
+
+/* --- .docx: unzip, then lay the text out like Word does (fonts, tabs) so chords can be placed by position --- */
+function u16(d,o){ return d[o]|(d[o+1]<<8); }
+function u32(d,o){ return (d[o]|(d[o+1]<<8)|(d[o+2]<<16)|(d[o+3]<<24))>>>0; }
+async function zipFile(buf,name){
+  var d=new Uint8Array(buf), eocd=-1;
+  for(var i=d.length-22;i>=0 && i>d.length-70000;i--){ if(u32(d,i)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('not a zip');
+  var n=u16(d,eocd+10), off=u32(d,eocd+16);
+  for(var e=0;e<n;e++){
+    var method=u16(d,off+10), csize=u32(d,off+20), nl=u16(d,off+28), el=u16(d,off+30), cl=u16(d,off+32), lho=u32(d,off+42);
+    var fname=new TextDecoder().decode(d.subarray(off+46,off+46+nl));
+    if(fname===name){
+      var ds=lho+30+u16(d,lho+26)+u16(d,lho+28), data=d.subarray(ds,ds+csize);
+      if(method===0) return new TextDecoder().decode(data);
+      var stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new TextDecoder().decode(await new Response(stream).arrayBuffer());
+    }
+    off+=46+nl+el+cl;
+  }
+  return null;
+}
+var measureCtx=null;
+function measure(font,str){ if(!measureCtx) measureCtx=document.createElement('canvas').getContext('2d'); measureCtx.font=font; return measureCtx.measureText(str).width; }
+async function docxToLines(buf){
+  var W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  var docXml=await zipFile(buf,'word/document.xml'); if(!docXml) throw new Error('no document');
+  var styXml=await zipFile(buf,'word/styles.xml')||'';
+  var defSize=11, defFont='Calibri', defTab=36;
+  if(styXml){
+    var sd=new DOMParser().parseFromString(styXml,'application/xml');
+    var dd=sd.getElementsByTagNameNS(W,'docDefaults')[0];
+    if(dd){
+      var sz=dd.getElementsByTagNameNS(W,'sz')[0]; if(sz) defSize=(+sz.getAttributeNS(W,'val'))/2||defSize;
+      var rf=dd.getElementsByTagNameNS(W,'rFonts')[0]; if(rf) defFont=rf.getAttributeNS(W,'ascii')||defFont;
+    }
+  }
+  var doc=new DOMParser().parseFromString(docXml,'application/xml');
+  var paras=doc.getElementsByTagNameNS(W,'p'), lines=[];
+  function owner(node){ while(node && !(node.namespaceURI===W && node.localName==='p')) node=node.parentNode; return node; }
+  for(var pi=0;pi<paras.length;pi++){
+    var p=paras[pi], x=0, tabs=[], cur=[];
+    var ppr=p.getElementsByTagNameNS(W,'pPr')[0];
+    if(ppr && owner(ppr.parentNode)===p){
+      var ind=ppr.getElementsByTagNameNS(W,'ind')[0];
+      if(ind){ var lft=ind.getAttributeNS(W,'left')||ind.getAttributeNS(W,'start'); if(lft) x=(+lft)/20; }
+      var tb=ppr.getElementsByTagNameNS(W,'tabs')[0];
+      if(tb) [].slice.call(tb.getElementsByTagNameNS(W,'tab')).forEach(function(t){
+        if(t.getAttributeNS(W,'val')!=='clear') tabs.push((+t.getAttributeNS(W,'pos'))/20);
+      });
+      tabs.sort(function(a,b){return a-b});
+    }
+    var runs=p.getElementsByTagNameNS(W,'r');
+    for(var ri=0;ri<runs.length;ri++){
+      var r=runs[ri]; if(owner(r.parentNode)!==p) continue;
+      var size=defSize, font=defFont, bold=false, ital=false;
+      var rpr=r.getElementsByTagNameNS(W,'rPr')[0];
+      if(rpr){
+        var z=rpr.getElementsByTagNameNS(W,'sz')[0]; if(z) size=(+z.getAttributeNS(W,'val'))/2||size;
+        var f=rpr.getElementsByTagNameNS(W,'rFonts')[0]; if(f) font=f.getAttributeNS(W,'ascii')||font;
+        var b=rpr.getElementsByTagNameNS(W,'b')[0]; bold=!!b && b.getAttributeNS(W,'val')!=='0' && b.getAttributeNS(W,'val')!=='false';
+        var it=rpr.getElementsByTagNameNS(W,'i')[0]; ital=!!it && it.getAttributeNS(W,'val')!=='0' && it.getAttributeNS(W,'val')!=='false';
+      }
+      var fnt=(ital?'italic ':'')+(bold?'bold ':'')+size+'px "'+font+'", "Times New Roman", serif';
+      for(var ch=r.firstChild; ch; ch=ch.nextSibling){
+        if(ch.namespaceURI!==W) continue;
+        var ln=ch.localName;
+        if(ln==='t'){
+          var s=ch.textContent;
+          for(var k=0;k<s.length;k++){
+            var w=measure(fnt,s.charAt(k)); cur.push({c:s.charAt(k),x0:x,x1:x+w}); x+=w;
+          }
+        } else if(ln==='tab'){
+          var nx=null; for(var q=0;q<tabs.length;q++){ if(tabs[q]>x+0.5){ nx=tabs[q]; break; } }
+          if(nx===null) nx=(Math.floor(x/defTab)+1)*defTab;
+          cur.push({c:'\t',x0:x,x1:nx}); x=nx;
+        } else if(ln==='br' || ln==='cr'){
+          lines.push(cur); cur=[]; x=0;
+        }
+      }
+    }
+    lines.push(cur);
+  }
+  return lines;
+}
+
+/* --- .pdf: PDF.js (loaded from cdnjs on first use) gives text runs with positions --- */
+var pdfjsReady=null;
+function loadPdfjs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(pdfjsReady) return pdfjsReady;
+  pdfjsReady=new Promise(function(res,rej){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=function(){
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      res(window.pdfjsLib);
+    };
+    s.onerror=function(){ rej(new Error('Could not load the PDF reader. Check your connection.')); };
+    document.head.appendChild(s);
+  });
+  return pdfjsReady;
+}
+async function pdfToLines(buf){
+  var lib=await loadPdfjs();
+  var pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise, all=[];
+  for(var pn=1; pn<=Math.min(pdf.numPages,6); pn++){
+    var page=await pdf.getPage(pn), tc=await page.getTextContent();
+    var items=tc.items.filter(function(it){return it.str && it.str.length});
+    items.sort(function(a,b){ return b.transform[5]-a.transform[5]; });
+    var rows=[], cy=null;
+    items.forEach(function(it){
+      var y=it.transform[5];
+      if(cy===null || Math.abs(y-cy)>3){ rows.push([]); cy=y; }
+      rows[rows.length-1].push(it);
+    });
+    rows.forEach(function(row){
+      row.sort(function(a,b){ return a.transform[4]-b.transform[4]; });
+      var L=[], prevEnd=null;
+      row.forEach(function(it){
+        var x0=it.transform[4], w=it.width||0, n=it.str.length, size=Math.abs(it.transform[0])||10;
+        if(prevEnd!==null && x0-prevEnd>size*0.22 && L.length && L[L.length-1].c!==' ' && it.str.charAt(0)!==' '){
+          L.push({c:' ',x0:prevEnd,x1:x0});
+        }
+        for(var i=0;i<n;i++) L.push({c:it.str.charAt(i), x0:x0+w*i/n, x1:x0+w*(i+1)/n});
+        prevEnd=x0+w;
+      });
+      all.push(L);
+    });
+    all.push([]);
+  }
+  return all;
+}
+function textToLines(text){
+  return text.replace(/\r/g,'').split('\n').map(function(line){
+    var L=[], col=0;
+    for(var i=0;i<line.length;i++){
+      var ch=line.charAt(i);
+      if(ch==='\t'){ var n=(Math.floor(col/8)+1)*8; L.push({c:'\t',x0:col,x1:n}); col=n; }
+      else { L.push({c:ch,x0:col,x1:col+1}); col++; }
+    }
+    return L;
+  });
+}
+function plainToCho(text, base){
+  if(/\{\s*(title|t)\s*:/i.test(text) || /\[[A-G1-7][^\]]*\]/.test(text)) return text;   // already ChordPro
+  return linesToCho(textToLines(text), base);
+}
+function sniffOldDoc(buf){ var d=new Uint8Array(buf); return d.length>8 && d[0]===0xD0 && d[1]===0xCF && d[2]===0x11 && d[3]===0xE0; }
+async function fileToCho(file){
+  var base=file.name.replace(/\.[^.]+$/,'').replace(/\s*\[(?:docx?|pdf)\]\s*$/i,'');
+  var buf=await file.arrayBuffer();
+  var lower=file.name.toLowerCase();
+  if(/\.docx$/.test(lower)){
+    if(sniffOldDoc(buf)) throw new Error('old-doc');
+    var lines=await docxToLines(buf);
+    return linesToCho(lines, base);
+  }
+  if(/\.pdf$/.test(lower)){
+    var pl=await pdfToLines(buf);
+    if(!pl.some(function(L){return L.length>0})) throw new Error('no-text');
+    return linesToCho(pl, base);
+  }
+  throw new Error('unsupported');
+}
+
 /* import / export */
 $('impBtn').onclick=function(){ $('impFile').click(); };
-$('impFile').onchange=function(){
-  var files=[].slice.call(this.files), n=0;
+$('impFile').onchange=async function(){
+  var files=[].slice.call(this.files); this.value='';
   if(!files.length) return;
-  files.forEach(function(f){
-    var r=new FileReader();
-    r.onload=function(){
-      var t=String(r.result);
-      if(!/\{\s*(title|t)\s*:/i.test(t)) t='{title: '+f.name.replace(/\.[^.]+$/,'')+'}\n'+t;
-      var s={id:uid(),text:t,steps:0}; songs.push(s); cur=s; n++;
-      if(n===files.length){ select(cur.id); toast('Imported '+n+' file'+(n>1?'s':'')+'.'); }
-    };
-    r.readAsText(f);
-  });
-  this.value='';
+  var added=0, notes=[], last=null;
+  for(var i=0;i<files.length;i++){
+    var f=files[i], lower=f.name.toLowerCase(), text=null;
+    try{
+      if(/\.docx$|\.pdf$/.test(lower)){ toast('Converting '+f.name+'…'); text=await fileToCho(f); }
+      else if(/\.doc$/.test(lower)){ notes.push(f.name+': old .doc format. In Word choose Save As .docx, then import that.'); continue; }
+      else text=plainToCho(await f.text(), f.name.replace(/\.[^.]+$/,''));
+    }catch(e){
+      var msg=e && e.message;
+      if(msg==='old-doc') notes.push(f.name+': this is an old .doc file with a .docx name. Open it in Word and Save As .docx.');
+      else if(msg==='no-text') notes.push(f.name+': no text found (a scanned picture?).');
+      else notes.push(f.name+': could not be read ('+(msg||'error')+').');
+      continue;
+    }
+    if(!/\{\s*(title|t)\s*:/i.test(text)) text='{title: '+f.name.replace(/\.[^.]+$/,'')+'}\n'+text;
+    var s={id:uid(),text:text,steps:0,src:f.name}; songs.push(s); last=s; added++;
+  }
+  if(last) select(last.id);
+  if(notes.length) alert(notes.slice(0,6).join('\n\n')+(notes.length>6?'\n\n…and '+(notes.length-6)+' more.':''));
+  else if(added) toast('Imported '+added+' file'+(added>1?'s':'')+'.');
 };
 $('expBtn').onclick=function(){
   var name=(titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song';
