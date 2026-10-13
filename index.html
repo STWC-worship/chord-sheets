@@ -197,6 +197,17 @@ Bridge:
 Pre-Chorus:
 Intro:    Outro:    Tag:    Interlude:</pre>
     <p>A part runs until the next heading. Leave a blank line for a gap.</p>
+    <h3>Another language? (Spanish, Portuguese, French, Chinese…)</h3>
+    <p>These words are recognized for you: Coro, Estribillo, Verso, Estrofa, Puente, Pre-Coro, Final, Interludio, Refrão, Couplet, Pont, 主歌, 副歌, 橋段.</p>
+    <p>Any other word works too. Put it on its own line, after a blank line, and end it with a colon:</p>
+    <pre>Coro:
+Verso 2:
+Estribillo final:</pre>
+    <p>The sure-fire way, in any language, is a code with your own word after the colon:</p>
+    <pre>{soc: Coro}   ...   {eoc}
+{sov: Verso 1}   ...   {eov}
+{sob: Puente}   ...   {eob}</pre>
+    <p>(<code>soc</code> = start of chorus, <code>sov</code> = start of verse, <code>sob</code> = start of bridge. The <code>e</code> ones end them. Ending is optional.)</p>
 
     <h3>3. Song details go in curly braces at the top</h3>
     <pre>{title: Amazing Grace}
@@ -359,7 +370,9 @@ var ALIAS={sob:'start_of_bridge',eob:'end_of_bridge',t:'title',st:'subtitle',su:
 function parse(text){
   var meta={}, blocks=[], blk=null;
   function open(type,label,implicit){ blk={type:type,label:label||'',implicit:!!implicit,lines:[]}; blocks.push(blk); }
+  var prevBlank=true;
   text.split(/\r?\n/).forEach(function(raw){
+    var wasBlank=prevBlank; prevBlank=(raw.trim()==='');
     if(/^\s*#/.test(raw)) return;
     var d=raw.match(/^\s*\{\s*([^:}\s]+)\s*:?\s*(.*?)\s*\}\s*$/);
     if(d){
@@ -369,12 +382,8 @@ function parse(text){
       if(/^end_of_/.test(n)){ blk=null; return; }
       meta[n]=v; return;
     }
-    var sm=raw.match(SEC_RE);
-    if(sm){
-      var nm=sm[1].charAt(0).toUpperCase()+sm[1].slice(1).toLowerCase(), lbl=(nm+(sm[2]?' '+sm[2]:'')).replace('Prechorus','Pre-Chorus');
-      open(nm.toLowerCase()==='chorus'?'chorus':(nm.toLowerCase()==='bridge'?'bridge':'verse'), lbl, false);
-      return;
-    }
+    var hd=headingOf(raw, wasBlank);
+    if(hd){ open(hd.type, hd.label, false); return; }
     if(raw.trim()===''){
       if(blk && blk.implicit) blk=null;
       else if(blk) blk.lines.push({blank:true});
@@ -664,7 +673,12 @@ function buildPdf(){
   var PW=612, PH=792, MG=54, cw=0.6*fs, cols=Math.floor((PW-2*MG)/cw);
   var pages=[[]], y=PH-MG-fs;
   function room(h){ if(y-h<MG){ pages.push([]); y=PH-MG-fs; } }
-  function text(font,size,str){ pages[pages.length-1].push('BT /'+font+' '+size+' Tf '+MG+' '+y.toFixed(1)+' Td ('+pdfStr(str)+') Tj ET'); }
+  function rgb(hex){
+    var m=/^#?([0-9a-f]{6})$/i.exec(hex||''); if(!m) return '0 0 0';
+    var n=parseInt(m[1],16); return ((n>>16)/255).toFixed(3)+' '+(((n>>8)&255)/255).toFixed(3)+' '+((n&255)/255).toFixed(3);
+  }
+  var CHORD_RGB=rgb(settings.chordColor), LABEL_RGB=rgb(settings.labelColor);
+  function text(font,size,str,color){ pages[pages.length-1].push('BT /'+font+' '+size+' Tf '+(color||'0 0 0')+' rg '+MG+' '+y.toFixed(1)+' Td ('+pdfStr(str)+') Tj ET'); }
 
   room(fs*3); text('F2',fs+6,m.title||'Untitled'); y-=fs*1.9;
   var subs=[m.subtitle,m.artist].filter(Boolean).join('  -  ');
@@ -679,7 +693,7 @@ function buildPdf(){
 
   song.blocks.forEach(function(b){
     room(fs*4);
-    if(b.label){ text('F2',fs-1,b.label.toUpperCase()); y-=fs*1.4; }
+    if(b.label){ text('F2',fs-1,b.label.toUpperCase(),LABEL_RGB); y-=fs*1.4; }
     b.lines.forEach(function(l){
       if(l.note!==undefined){
         wrapPair('',l.note,cols).forEach(function(r){ room(fs*1.4); text('F3',fs,r[1]); y-=fs*1.4; });
@@ -691,7 +705,7 @@ function buildPdf(){
         wrapPair(p.chords,p.lyric,cols).forEach(function(r){
           var drawCh=showCh && r[0].trim()!=='';
           room(fs*(drawCh?2.7:1.4));
-          if(drawCh){ text('F2',fs,r[0]); y-=fs*1.15; }
+          if(drawCh){ text('F2',fs,r[0],CHORD_RGB); y-=fs*1.15; }
           text('F1',fs,r[1]); y-=fs*1.5;
         });
       }
@@ -843,7 +857,21 @@ $('libInput').onchange=function(){
 /* ---------- Word (.docx) and PDF import -> ChordPro ---------- */
 var CHORD_RE=/^(?:[A-G][#b]?(?:maj|min|m|M|dim|aug|sus|add|\+|-)?[0-9]*(?:(?:sus|add|maj|dim|aug|b|#)?[0-9]+)*(?:\/[A-G][#b]?)?|\/[A-G][#b]?)$/;
 var NASH_RE=/^[1-7][#b]?(?:m|M|sus|dim|aug|[0-9])*(?:\/[1-7][#b]?)?$/;
-var SEC_RE=/^\s*[\[(]?\s*(verse|chorus|bridge|pre-?chorus|intro|outro|tag|interlude|ending|instrumental|refrain|turnaround)\s*(\d*)\s*[\])]?\s*:?\s*$/i;
+var HEAD_WORDS='verse|chorus|bridge|pre-?chorus|intro|outro|tag|interlude|ending|instrumental|refrain|turnaround|verso|estrofa|coro|estribillo|puente|pre-?coro|precoro|introducci[oó]n|interludio|final|coda|couplet|pont|estrofe|ponte|refr[aã]o|主歌|副歌|橋段|桥段|前奏|間奏|间奏|尾奏';
+var SEC_RE=new RegExp('^\\s*[\\[(]?\\s*('+HEAD_WORDS+')\\s*(\\d*)\\s*[\\])]?\\s*:?\\s*$','i');
+var CHORUS_WORDS=/^(chorus|coro|estribillo|refrain|refr[aã]o|副歌)$/i, BRIDGE_WORDS=/^(bridge|puente|ponte|pont|橋段|桥段)$/i;
+function headingOf(line, prevBlank){
+  var m=line.match(SEC_RE), word, num='', label;
+  if(m){ word=m[1]; num=m[2]||''; label=word.charAt(0).toUpperCase()+word.slice(1)+(num?' '+num:''); }
+  else {
+    // any language: a short line that is only a word or two and ends with a colon, after a blank line
+    var u=line.match(/^\s*([^\[\]{}:#]{1,24}?)\s*:\s*$/);
+    if(!u || !prevBlank || u[1].trim().split(/\s+/).length>3) return null;
+    word=u[1].trim(); label=word.charAt(0).toUpperCase()+word.slice(1);
+  }
+  var base=word.replace(/\s*\d+$/,'').split(/\s+/)[0];
+  return {type: CHORUS_WORDS.test(base)?'chorus':(BRIDGE_WORDS.test(base)?'bridge':'verse'), label:label.replace(/^Prechorus/i,'Pre-Chorus')};
+}
 var CREDIT_RE=/(©|\(c\)|copyright|ccli|all rights reserved|written by|words (?:and|&) music|music (?:and|&) lyrics|lyrics by|music by|words by|arr(?:\.|anged)? by|\b(?:19|20)\d\d\b.*(?:music|publishing|records|worship|ministries|songs|integrity|vineyard|hillsong|bethel))/i;
 var META_RE=/^(key|tempo|bpm|capo|time|ccli)\s*[:#]/i;
 var INLINE_RE=/\s*\(\s*((?:[A-G][#b]?[^\s()]*\s*)+)\)\s*$/;
@@ -945,15 +973,14 @@ function linesToCho(lines, fallback){
   var open=null;
   function close(){ if(open){ out.push('{end_of_'+open+'}'); open=null; } }
   var footer=footMeta.map(function(x){return '{comment: '+x+'}'});
+  var prevBlank=true;
   body.forEach(function(l){
-    var s=l.match(SEC_RE);
-    if(s){
+    var wasBlank=prevBlank; prevBlank=(l.trim()==='');
+    var hd=l.indexOf('[')<0 ? headingOf(l, wasBlank) : null;
+    if(hd){
       close();
-      var name=s[1].charAt(0).toUpperCase()+s[1].slice(1).toLowerCase(), num=s[2];
-      var label=(name+(num?' '+num:'')).replace('Prechorus','Pre-Chorus');
-      var typ=name.toLowerCase()==='chorus'?'chorus':(name.toLowerCase()==='bridge'?'bridge':'verse');
       if(out.length && out[out.length-1]!=='') out.push('');
-      out.push('{start_of_'+typ+': '+label+'}'); open=typ; return;
+      out.push('{start_of_'+hd.type+': '+hd.label+'}'); open=hd.type; return;
     }
     var im=l.match(INLINE_RE);
     if(im && l.slice(0,im.index).trim()){
