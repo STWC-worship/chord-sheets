@@ -144,7 +144,7 @@ pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;ove
     <button id="bothBtn">Save .cho + PDF</button>
     <button id="expBtn">Export .cho</button>
     <button id="impBtn">Import</button>
-    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,text/plain" multiple hidden>
+    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
   </div>
   <div class="tabs">
     <button id="tabEdit" class="on">Edit</button>
@@ -1033,6 +1033,66 @@ function plainToCho(text, base){
   if(/\{\s*(title|t)\s*:/i.test(text) || /\[[A-G1-7][^\]]*\]/.test(text)) return text;   // already ChordPro
   return linesToCho(textToLines(text), base);
 }
+/* --- .rtf: read the formatting codes, then lay out with real font widths and tab stops --- */
+var RTF_MAP={0x85:'…',0x91:'‘',0x92:'’',0x93:'“',0x94:'”',0x95:'•',0x96:'–',0x97:'—'};
+function rtfToLines(text){
+  var DEST=['fonttbl','colortbl','stylesheet','info','pict','header','footer','footnote','object','themedata','colorschememapping','latentstyles','datastore','xmlnstbl','listtable','listoverridetable','generator','rsidtbl','mmathPr','fldinst'];
+  var i=0, n=text.length, stack=[], st={sz:12,font:null,b:false,it:false,skip:false};
+  var fonts={}, lines=[], cur=[], x=0, left=0, tabs=[], inFT=false, ftDepth=-1, defFont=null, started=false;
+  function fontStr(){ return (st.it?'italic ':'')+(st.b?'bold ':'')+st.sz+'px "'+(fonts[st.font]||fonts[defFont]||'Times New Roman')+'", "Times New Roman", serif'; }
+  function put(ch){ if(st.skip||inFT) return; var w=measure(fontStr(),ch); cur.push({c:ch,x0:x,x1:x+w}); x+=w; }
+  function tab(){ if(st.skip) return; var nx=null; for(var q=0;q<tabs.length;q++){ if(tabs[q]>x+0.5){ nx=tabs[q]; break; } }
+    if(nx===null) nx=(Math.floor(x/36)+1)*36; cur.push({c:'\t',x0:x,x1:nx}); x=nx; }
+  function nl(){ lines.push(cur); cur=[]; x=left; }
+  while(i<n){
+    var c=text.charAt(i);
+    if(c==='{'){ stack.push({sz:st.sz,font:st.font,b:st.b,it:st.it,skip:st.skip}); i++; continue; }
+    if(c==='}'){ if(inFT && stack.length<=ftDepth) inFT=false; st=stack.pop()||st; i++; continue; }
+    if(c==='\\'){
+      var d=text.charAt(i+1);
+      if(d==='\\'||d==='{'||d==='}'){ put(d); i+=2; continue; }
+      if(d==="'"){ var hv=parseInt(text.substr(i+2,2),16); put(RTF_MAP[hv]||String.fromCharCode(hv)); i+=4; continue; }
+      if(d==='\n'||d==='\r'){ if(!st.skip) nl(); i+=2; if(d==='\r' && text.charAt(i)==='\n') i++; continue; }   // backslash + newline = paragraph end
+      if(d==='*'){ st.skip=true; i+=2; continue; }
+      if(d==='~'){ put(' '); i+=2; continue; }
+      if(d==='-'||d==='_'||d==='|'||d===':'){ i+=2; continue; }
+      var m=/^\\([a-zA-Z]+)(-?\d+)? ?/.exec(text.slice(i,i+40));
+      if(!m){ i+=2; continue; }
+      i+=m[0].length;
+      var w=m[1], v=(m[2]!==undefined)?+m[2]:null;
+      if(DEST.indexOf(w)>=0){
+        if(w==='fonttbl'){ inFT=true; ftDepth=stack.length; } else st.skip=true;
+        continue;
+      }
+      if(w==='par'||w==='line'||w==='sect'||w==='page'){ if(!st.skip) nl(); }
+      else if(w==='pard'){ left=0; tabs=[]; }
+      else if(w==='tab'){ tab(); }
+      else if(w==='fs'){ st.sz=(v||24)/2; }
+      else if(w==='deff'){ defFont=v; }
+      else if(w==='f'){ st.font=v; if(inFT) defFont=defFont===null?v:defFont; }
+      else if(w==='b'){ st.b=(v!==0); }
+      else if(w==='i'){ st.it=(v!==0); }
+      else if(w==='li'){ left=(v||0)/20; if(!cur.length) x=left; }
+      else if(w==='tx'){ tabs.push((v||0)/20); tabs.sort(function(a,b){return a-b}); }
+      else if(w==='plain'){ st.b=false; st.it=false; }
+      else if(w==='u'){ var cp=v<0?v+65536:v; if(cp===8232||cp===8233){ if(!st.skip) nl(); } else if(cp===160){ put(' '); } else put(String.fromCharCode(cp)); if(text.charAt(i)!=='\\' && text.charAt(i)!=='{' && text.charAt(i)!=='}') i++; }
+      else if(w==='emdash'){ put('—'); } else if(w==='endash'){ put('–'); }
+      else if(w==='lquote'){ put('‘'); } else if(w==='rquote'){ put('’'); }
+      else if(w==='ldblquote'){ put('“'); } else if(w==='rdblquote'){ put('”'); }
+      continue;
+    }
+    if(c==='\r'||c==='\n'){ i++; continue; }
+    if(inFT){                                   // font table: "Name;" after the \fN code
+      var semi=text.indexOf(';',i);
+      var nm=text.slice(i,semi<0?n:semi).trim();
+      if(nm && st.font!==null) fonts[st.font]=nm;
+      i=semi<0?n:semi+1; continue;
+    }
+    put(c); i++;
+  }
+  if(cur.length) lines.push(cur);
+  return lines;
+}
 function sniffOldDoc(buf){ var d=new Uint8Array(buf); return d.length>8 && d[0]===0xD0 && d[1]===0xCF && d[2]===0x11 && d[3]===0xE0; }
 async function fileToCho(file){
   var base=file.name.replace(/\.[^.]+$/,'').replace(/\s*\[(?:docx?|pdf)\]\s*$/i,'');
@@ -1048,6 +1108,11 @@ async function fileToCho(file){
     if(!pl.some(function(L){return L.length>0})) throw new Error('no-text');
     return linesToCho(pl, base);
   }
+  if(/\.rtf$/.test(lower)){
+    var rtext=new TextDecoder('windows-1252').decode(buf);
+    if(rtext.indexOf('{\\rtf')!==0) throw new Error('unsupported');
+    return linesToCho(rtfToLines(rtext), base);
+  }
   throw new Error('unsupported');
 }
 
@@ -1060,7 +1125,7 @@ $('impFile').onchange=async function(){
   for(var i=0;i<files.length;i++){
     var f=files[i], lower=f.name.toLowerCase(), text=null;
     try{
-      if(/\.docx$|\.pdf$/.test(lower)){ toast('Converting '+f.name+'…'); text=await fileToCho(f); }
+      if(/\.docx$|\.pdf$|\.rtf$/.test(lower)){ toast('Converting '+f.name+'…'); text=await fileToCho(f); }
       else if(/\.doc$/.test(lower)){ notes.push(f.name+': old .doc format. In Word choose Save As .docx, then import that.'); continue; }
       else text=plainToCho(await f.text(), f.name.replace(/\.[^.]+$/,''));
     }catch(e){
