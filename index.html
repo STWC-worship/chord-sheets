@@ -152,12 +152,13 @@ dialog#legend li{margin:5px 0}
         <button data-act="expBtn" role="menuitem"><b>ChordPro file (.cho)</b><small>for keeping and sharing</small></button>
         <button data-act="bothBtn" role="menuitem"><b>.cho + PDF together</b><small>one tap, both files</small></button>
         <button data-act="printBtn" role="menuitem"><b>Print…</b><small>your printer or Save as PDF</small></button>
+        <button data-act="shareBtn" role="menuitem"><b>Share…</b><small>AirDrop, Messages, Notes</small></button>
       </div>
     </span>
     <span hidden>
       <button id="pdfBtn" type="button">Save PDF</button><button id="printBtn" type="button">Print</button>
       <button id="jpgBtn" type="button">JPG</button><button id="pngBtn" type="button">PNG</button>
-      <button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
+      <button id="shareBtn" type="button">Share</button><button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
     </span>
   </div>
   <div class="row more" id="more">
@@ -256,7 +257,7 @@ short forms:  {sov} {eov}   {soc} {eoc}   {sob} {eob}</pre>
       <li><b>[ ] chord</b>: puts a pair of brackets where your cursor is. If you highlight a word first, it wraps the word.</li>
       <li><b>Convert pasted chords-over-lyrics</b>: paste a chart where chords sit above the words, then tap this.</li>
       <li><b>♭ − / + ♯</b>: change the key.  <b>A− / A+</b>: smaller / bigger text.</li>
-      <li><b>Export ▾</b>: everything you can save, in one menu: PDF, picture (JPG or PNG), the .cho file, .cho + PDF together, or Print. Use JPG for places that only take a picture.</li>
+      <li><b>Export ▾</b>: everything you can save, in one menu: PDF, picture (JPG or PNG), the .cho file, .cho + PDF together, Print, or Share. On a Mac these save straight to your Downloads folder. On an iPhone they open the Share sheet, where <b>Save to Files</b> puts the file anywhere you like.</li>
       <li><b>Import</b>: opens .cho, .txt, .docx, .rtf or .pdf files.</li>
       <li><b>Open library folder</b>: search a whole folder of songs without importing them.</li>
     </ul>
@@ -303,6 +304,7 @@ var lastId = LS.get('csm.last');
 cur = songs.filter(function(x){return x.id===lastId})[0] || songs[0];
 
 function uid(){ return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+var IS_TOUCH_DEVICE=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 var warnedFull=false;
 function saveAll(){
   var ok=LS.set('csm.songs', JSON.stringify(songs)); LS.set('csm.last', cur.id);
@@ -762,7 +764,7 @@ function savePdf(){
   var blob=new Blob([bytes],{type:'application/pdf'});
   var file=null;
   try{ file=new File([blob],name+'.pdf',{type:'application/pdf'}); }catch(e){}
-  if(file && navigator.canShare && navigator.canShare({files:[file]})){
+  if(IS_TOUCH_DEVICE && file && navigator.canShare && navigator.canShare({files:[file]})){
     navigator.share({files:[file],title:name}).catch(function(){});
     return;
   }
@@ -793,7 +795,7 @@ function saveBoth(){
     chof=new File([cur.text],name+'.cho',{type:'text/plain'});
     pdff=new File([new Blob([pdfBytes],{type:'application/pdf'})],name+'.pdf',{type:'application/pdf'});
   }catch(e){}
-  if(chof && pdff && navigator.canShare && navigator.canShare({files:[chof,pdff]})){
+  if(IS_TOUCH_DEVICE && chof && pdff && navigator.canShare && navigator.canShare({files:[chof,pdff]})){
     navigator.share({files:[chof,pdff],title:name}).catch(function(){});
     return;
   }
@@ -1358,7 +1360,7 @@ function saveImage(kind){
     if(!blob){ toast('Could not make the picture.'); return; }
     var file=null;
     try{ file=new File([blob],name+ext,{type:type}); }catch(e){}
-    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+    if(IS_TOUCH_DEVICE && file && navigator.canShare && navigator.canShare({files:[file]})){
       navigator.share({files:[file],title:name}).catch(function(){});
       return;
     }
@@ -1380,6 +1382,13 @@ $('exportMenu').addEventListener('click',function(e){
 });
 document.addEventListener('click',function(){ $('exportMenu').hidden=true; });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') $('exportMenu').hidden=true; });
+$('shareBtn').onclick=function(){
+  var name=safeName(), bytes;
+  try{ bytes=buildPdf(); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
+  var file=new File([new Blob([bytes],{type:'application/pdf'})],name+'.pdf',{type:'application/pdf'});
+  if(navigator.canShare && navigator.canShare({files:[file]})) navigator.share({files:[file],title:name}).catch(function(){});
+  else toast('Sharing is not available here. Use PDF to save it instead.');
+};
 $('jpgBtn').onclick=function(){ saveImage('jpg'); };
 $('pngBtn').onclick=function(){ saveImage('png'); };
 
