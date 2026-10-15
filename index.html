@@ -411,6 +411,7 @@ function parse(text){
       else if(blk) blk.lines.push({blank:true});
       return;
     }
+    if(!blk && !meta.artist && /^\s*by\s+\S/i.test(raw) && !blocks.length){ meta.artist=raw.replace(/^\s*by\s+/i,'').trim(); return; }
     if(!blk) open('verse','',true);
     blk.lines.push({text:raw});
   });
@@ -737,7 +738,7 @@ function pdfBlocks(song,fs,colW){
   }
   var blocks=[], maxLine=0;
   song.blocks.forEach(function(b){
-    var E=[];
+    var E=[], bMax=0;
     if(b.label) E.push({h:fs*1.15,draw:function(x,T){ return [op('F2',fs*0.72,b.label.toUpperCase(),x,T-fs*0.82,LABEL)]; }});
     b.lines.forEach(function(l){
       if(l.note!==undefined){
@@ -751,7 +752,7 @@ function pdfBlocks(song,fs,colW){
       for(i=1;i<parts.length;i+=2) segs.push({chord:parts[i],text:parts[i+1]||''});
       var hasAny=segs.some(function(x){return x.chord}), showCh=settings.chords && hasAny;
       if(!hasAny){
-        maxLine=Math.max(maxLine,pdfW(l.text,fs));
+        maxLine=Math.max(maxLine,pdfW(l.text,fs)); bMax=Math.max(bMax,pdfW(l.text,fs));
         wrapPlain(l.text,fs).forEach(function(r){ E.push({h:fs*1.32,draw:function(x,T){ return [op('F1',fs,r,x,T-fs*0.98,BLACK)]; }}); });
         return;
       }
@@ -775,7 +776,7 @@ function pdfBlocks(song,fs,colW){
         if(rowW+ww>colW && rows[rows.length-1].length){ rows.push([]); rowW=0; }
         rows[rows.length-1].push(w); rowW+=ww;
       });
-      maxLine=Math.max(maxLine,lineTotal);
+      maxLine=Math.max(maxLine,lineTotal); bMax=Math.max(bMax,lineTotal);
       rows.forEach(function(row){
         var anyCh=showCh && row.some(function(w){return w.some(function(p){return p.chord})});
         E.push({h:anyCh?fs*2.25:fs*1.32,draw:function(x,T){
@@ -795,56 +796,59 @@ function pdfBlocks(song,fs,colW){
     if(cur.length) paras.push(cur);
     var tot=0; E.forEach(function(e){ tot+=e.h; });
     paras.forEach(function(pa){ pa.h=0; pa.forEach(function(e){ pa.h+=e.h; }); });
-    blocks.push({entries:E,paras:paras,h:tot});
+    var hasContent=b.lines.some(function(l){ return !l.blank; });
+    blocks.push({entries:E,paras:paras,h:tot,maxLine:bMax,empty:!hasContent});
   });
+  // headings left dangling at the very end (an empty Outro, say) are dropped
+  while(blocks.length && blocks[blocks.length-1].empty && blocks.length>1) blocks.pop();
   return {blocks:blocks,maxLine:maxLine,colW:colW};
 }
 // pageCols: columns per page, e.g. [1], [2], [1,1], [2,1]
-function pdfFlow(song,fs,pageCols){
-  var TOP=PDF_PH-PDF_MG, BOT=PDF_MG, hdr=pdfHeader(song,fs), cache={};
-  function V(nc){
-    if(!cache[nc]) cache[nc]=pdfBlocks(song,fs,(PDF_PW-2*PDF_MG-(nc-1)*PDF_GUT)/nc);
-    return cache[nc];
+function pdfFlow(song,fsSpec,pageCols){
+  function fsOf(pg){ return Array.isArray(fsSpec)?fsSpec[Math.min(pg,fsSpec.length-1)]:fsSpec; }
+  var TOP=PDF_PH-PDF_MG, BOT=PDF_MG, hdr=pdfHeader(song,fsOf(0)), cache={};
+  function V(nc,fsv){
+    var key=nc+'@'+fsv;
+    if(!cache[key]) cache[key]=pdfBlocks(song,fsv,(PDF_PW-2*PDF_MG-(nc-1)*PDF_GUT)/nc);
+    return cache[key];
   }
   var pages=[[]], p=0, c=0, overflow=false;
   function colTop(pg){ return pg===0?TOP-hdr.hh:TOP; }
   var y=colTop(0);
   function ncOf(pg){ return pageCols[Math.min(pg,pageCols.length-1)]; }
-  function advance(){
-    c++;
-    if(c>=ncOf(p)){ p++; c=0; if(p>=pageCols.length) overflow=true; if(!pages[p]) pages[p]=[]; }
-    y=colTop(p);
-  }
-  function put(entries){
-    var nc=ncOf(p), colW=V(nc).colW, x=PDF_MG+c*(colW+PDF_GUT);
+  function newPage(){ p++; c=0; if(p>=pageCols.length) overflow=true; if(!pages[p]) pages[p]=[]; y=colTop(p); }
+  function advance(){ c++; if(c>=ncOf(p)) newPage(); else y=colTop(p); }
+  var wrapsHit=false;
+  function put(entries,bi){
+    var nc=ncOf(p), v=V(nc,fsOf(p)), x=PDF_MG+c*(v.colW+PDF_GUT);
+    if(bi!==undefined && v.blocks[bi].maxLine>v.colW+0.5) wrapsHit=true;
     entries.forEach(function(e){ pages[p].push({x:x,y:y,e:e}); y-=e.h; });
   }
-  var nb=V(1).blocks.length;
+  var nb=V(1,fsOf(0)).blocks.length;
   for(var bi=0; bi<nb; bi++){
-    for(var guard=0; guard<8; guard++){
-      var nc=ncOf(p), blk=V(nc).blocks[bi], avail=y-BOT, full=colTop(p)-BOT, fresh=(y>=colTop(p)-0.5);
-      if(blk.h<=avail+0.01){ put(blk.entries); break; }                 // fits where we are
+    for(var guard=0; guard<10; guard++){
+      var nc=ncOf(p), v=V(nc,fsOf(p)), blk=v.blocks[bi], avail=y-BOT, full=colTop(p)-BOT, fresh=(y>=colTop(p)-0.5);
+      // a section with long lines does not belong in a narrow column when a wider page follows
+      if(nc>1 && blk.maxLine>v.colW+0.5 && p+1<pageCols.length && ncOf(p+1)<nc){ newPage(); continue; }
+      if(blk.h<=avail+0.01){ put(blk.entries,bi); break; }               // fits where we are
       if(!fresh && blk.h<=full){ advance(); continue; }                  // whole section fits in a fresh column: move it
-      if(blk.h<=full){ put(blk.entries); break; }
+      if(blk.h<=full){ put(blk.entries,bi); break; }
       // taller than a whole column: split only between paragraphs
-      var done=false;
       for(var pi=0; pi<blk.paras.length; pi++){
-        for(var g2=0; g2<8; g2++){
-          var nc2=ncOf(p), para=V(nc2).blocks[bi].paras[pi], av2=y-BOT, fr2=(y>=colTop(p)-0.5);
-          if(para.h<=av2+0.01 || fr2){ put(para); break; }
+        for(var g2=0; g2<10; g2++){
+          var v2=V(ncOf(p),fsOf(p)), para=v2.blocks[bi].paras[pi], av2=y-BOT, fr2=(y>=colTop(p)-0.5);
+          if(para.h<=av2+0.01 || fr2){ put(para,bi); break; }
           advance();
         }
       }
-      done=true; break;
+      break;
     }
   }
   var n=pages.filter(function(pg){return pg.length}).length;
-  var wraps=false;
-  for(var k in cache){ if(+k>=1 && cache[k].maxLine>cache[k].colW+0.5) wraps=true; }
-  // wraps only matters for columns actually used
-  var used={}; pages.forEach(function(pg,i){ if(pg.length) used[ncOf(i)]=true; });
-  wraps=false; for(var u in used){ if(cache[u] && cache[u].maxLine>cache[u].colW+0.5) wraps=true; }
-  return {pages:pages,head:hdr.head,hh:hdr.hh,MG:PDF_MG,TOP:TOP,n:n,overflow:overflow,wraps:wraps};
+  var low=colTop(0);
+  (pages[0]||[]).forEach(function(it){ low=Math.min(low,it.y-it.e.h); });
+  var fill1=(colTop(0)-low)/Math.max(1,(colTop(0)-BOT));      // how full page 1 is
+  return {pages:pages,head:hdr.head,hh:hdr.hh,MG:PDF_MG,TOP:TOP,n:n,overflow:overflow,wraps:wrapsHit,fill1:fill1};
 }
 function pdfPlan(song){
   var MAXFS=28, MINFS=11, fs;
@@ -867,9 +871,34 @@ function pdfPlan(song){
     });
     return out;
   }
+  // page 1 in two columns (no wrapped lines), the wide sections on a single-column page 2, each page at its own size
+  function twoColPageOne(){
+    var out=null, f1, f2;
+    for(f1=16; f1>=9; f1-=0.5){
+      for(f2=MAXFS; f2>=MINFS; f2-=0.5){
+        var fl=pdfFlow(song,[f1,f2],[2,1]);
+        if(fl.n<=2 && !fl.overflow && !fl.wraps){
+          if(!out || f1+f2>out.sum) out={fs:[f1,f2],pageCols:[2,1],sum:f1+f2};
+          break;
+        }
+      }
+    }
+    return out;
+  }
   var one=best(configs.slice(0,2),false,MINFS);                     // one page, no wrapped lines, readable
   if(one) return one;
-  var two=best(configs.slice(2),false,MINFS);                       // two pages, readable, no wrapped lines
+  var twoA=best([configs[2]],false,MINFS);                          // two pages, one column each
+  if(twoA){
+    var fa=pdfFlow(song,twoA.fs,[1,1]);
+    if(fa.fill1>=0.985) return twoA;                                // page 1 completely full: keep one column
+    // a section got pushed to page 2 and left room behind: use two columns on page 1 so nothing is pushed
+    var tc=twoColPageOne();
+    if(tc && tc.fs[0]>=9.5) return tc;
+    var twoB=best([configs[3]],true,10);                            // otherwise allow a few wrapped lines
+    if(twoB && twoB.fs>=twoA.fs*0.8) return twoB;
+    return twoA;
+  }
+  var two=best(configs.slice(3),false,MINFS);
   if(two) return two;
   var any=best(configs,true,9);                                     // allow wrapped lines, down to 9 pt
   if(any) return any;
