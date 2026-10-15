@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="chords.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Chord Sheets">
 <title>Chord Sheet Maker</title>
@@ -1701,6 +1702,14 @@ $('impBtn').onclick=async function(){
   $('impFile').click();
 };
 $('impFile').onchange=function(){ var f=[].slice.call(this.files); this.value=''; importFiles(f,[]); };
+if('launchQueue' in window && window.launchQueue && window.launchQueue.setConsumer){
+  // files handed over by the operating system: double-click a .cho with this app set as its default
+  window.launchQueue.setConsumer(async function(params){
+    if(!params || !params.files || !params.files.length) return;
+    var hs=params.files, fs=await Promise.all(hs.map(function(h){ return h.getFile(); }));
+    importFiles(fs,hs);
+  });
+}
 async function importFiles(files,handles){
   if(!files.length) return;
   var added=0, notes=[], last=null;
@@ -1718,6 +1727,8 @@ async function importFiles(files,handles){
       continue;
     }
     if(!/\{\s*(title|t)\s*:/i.test(text)) text='{title: '+f.name.replace(/\.[^.]+$/,'')+'}\n'+text;
+    var dup=songs.filter(function(x){ return x.src===f.name && x.text===text; })[0];
+    if(dup){ last=dup; if(handles[i]) songHandle[dup.id]=handles[i]; continue; }   // already in the list: just open it
     var s={id:uid(),text:text,steps:0,src:f.name}; songs.push(s); last=s; added++;
     if(handles[i]) songHandle[s.id]=handles[i];
   }
