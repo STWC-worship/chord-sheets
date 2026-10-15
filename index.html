@@ -853,7 +853,8 @@ function pdfFlow(song,fsSpec,pageCols){
   return {pages:pages,head:hdr.head,hh:hdr.hh,MG:PDF_MG,TOP:TOP,n:n,overflow:overflow,wraps:wrapsHit,fill1:fill1};
 }
 function pdfPlan(song){
-  var MAXFS=28, MINFS=11, fs;
+  // from JT's own Word sheets: short songs 16-18 pt, longer ones 12-14 pt, kept on one page whenever it reads
+  var MAXFS=22, MINFS=11, fs;
   function maxFs(pc,allowWrap,floor){
     for(fs=MAXFS; fs>=floor; fs-=0.5){
       var f=pdfFlow(song,fs,pc);
