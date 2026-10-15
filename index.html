@@ -259,7 +259,7 @@ short forms:  {sov} {eov}   {soc} {eoc}   {sob} {eob}</pre>
       <li><b>[ ] chord</b>: puts a pair of brackets where your cursor is. If you highlight a word first, it wraps the word.</li>
       <li><b>Convert pasted chords-over-lyrics</b>: paste a chart where chords sit above the words, then tap this.</li>
       <li><b>♭ − / + ♯</b>: change the key.  <b>A− / A+</b>: smaller / bigger text.</li>
-      <li><b>Export ▾</b>: everything you can save, in one menu: PDF, picture (JPG or PNG), the .cho file, .cho + PDF together, Print, or Share. PDFs use a bold, clean font and shrink to fit on one page (two at most), so they read well in a dark room. A verse, chorus or bridge is never split across pages or columns. On a Mac these save straight to your Downloads folder. On an iPhone they open the Share sheet, where <b>Save to Files</b> puts the file anywhere you like.</li>
+      <li><b>Export ▾</b>: everything you can save, in one menu: PDF, picture (JPG or PNG), the .cho file, .cho + PDF together, Print, or Share. PDFs use a bold, clean font and shrink to fit on one page (two at most), so they read well in a dark room. A verse, chorus or bridge is never split across pages or columns. In Chrome or Edge, saving opens a normal Save window that starts in the folder the song came from, so you can drop the PDF right next to it. In Safari, pages cannot choose a folder: set Safari, Settings, General, File download location to Ask for each download. On an iPhone they open the Share sheet, where <b>Save to Files</b> puts the file anywhere you like.</li>
       <li><b>Import</b>: opens .cho, .txt, .docx, .rtf or .pdf files.</li>
       <li><b>Open library folder</b>: search a whole folder of songs without importing them.</li>
     </ul>
@@ -524,12 +524,14 @@ function refreshList(){
 function openFromLibrary(i){
   var L=library[i]; if(!L) return;
   var have=songs.filter(function(x){return x.src===L.file && x.text===L.text})[0];
-  if(have){ select(have.id); return; }
+  if(have){ if(L.handle) songHandle[have.id]=L.handle; select(have.id); return; }
   var s={id:uid(), text:L.text, steps:0, src:L.file};
+  if(L.handle) songHandle[s.id]=L.handle;
   songs.push(s); select(s.id);
 }
 function select(id){
   cur=songs.filter(function(s){return s.id===id})[0]||songs[0];
+  if(songHandle[cur.id]) lastSourceHandle=songHandle[cur.id];
   steps=cur.steps||0;
   document.getElementById('src').value=cur.text;
   refreshList(); render(); saveAll();
@@ -986,6 +988,50 @@ function imagePdf(canvas){
   parts.forEach(function(u){ out.set(u,pos); pos+=u.length; });
   return out;
 }
+/* ---------- choose where to save (Chrome and Edge) ---------- */
+var lastSourceHandle=null, songHandle={};
+var CAN_PICK_SAVE=(typeof window.showSaveFilePicker==='function') && !IS_TOUCH_DEVICE;
+var CAN_PICK_DIR=(typeof window.showDirectoryPicker==='function') && !IS_TOUCH_DEVICE;
+var CAN_PICK_OPEN=(typeof window.showOpenFilePicker==='function') && !IS_TOUCH_DEVICE;
+function rememberSource(h){ lastSourceHandle=h; try{ idbSet('lastSource',h); }catch(e){} }
+try{ idbGet('lastSource').then(function(h){ if(h && !lastSourceHandle) lastSourceHandle=h; }); }catch(e){}
+async function smartSave(blob,fileName,mime,ext){
+  if(!CAN_PICK_SAVE) return false;
+  try{
+    var accept={}; accept[mime]=[ext];
+    var opts={suggestedName:fileName,types:[{description:ext.slice(1).toUpperCase()+' file',accept:accept}],id:'chordsheets'};
+    if(lastSourceHandle) opts.startIn=lastSourceHandle;           // the dialog opens in the folder the song came from
+    var h=await window.showSaveFilePicker(opts);
+    var w=await h.createWritable(); await w.write(blob); await w.close();
+    rememberSource(h);
+    toast('Saved '+h.name+'.');
+    return true;
+  }catch(e){
+    if(e && e.name==='AbortError') return true;                     // cancelled: nothing more to do
+    return false;                                                   // anything else: fall back to a normal download
+  }
+}
+async function saveInFolder(items){                                 // several files into one chosen folder
+  if(!CAN_PICK_DIR) return false;
+  try{
+    var opts={id:'chordsheets-folder',mode:'readwrite'};
+    if(lastSourceHandle) opts.startIn=lastSourceHandle;
+    var dir=await window.showDirectoryPicker(opts);
+    for(var i=0;i<items.length;i++){
+      var exists=false;
+      try{ await dir.getFileHandle(items[i].name); exists=true; }catch(e){}
+      if(exists && !confirm('"'+items[i].name+'" is already in "'+dir.name+'". Replace it?')) continue;
+      var fh=await dir.getFileHandle(items[i].name,{create:true});
+      var w=await fh.createWritable(); await w.write(items[i].blob); await w.close();
+      if(i===0) rememberSource(fh);
+    }
+    toast('Saved '+items.map(function(x){return x.name}).join(' and ')+' in "'+dir.name+'".');
+    return true;
+  }catch(e){
+    if(e && e.name==='AbortError') return true;
+    return false;
+  }
+}
 function savePdf(bw){
   var bytes;
   try{ bytes=buildPdf(bw===true); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
@@ -997,10 +1043,14 @@ function savePdf(bw){
     navigator.share({files:[file],title:name}).catch(function(){});
     return;
   }
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.pdf';
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
-  toast('PDF saved to your Downloads.');
+  function dl(){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.pdf';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    toast('PDF saved to your Downloads.');
+  }
+  if(CAN_PICK_SAVE){ smartSave(blob,name+'.pdf','application/pdf','.pdf').then(function(done){ if(!done) dl(); }); return; }
+  dl();
 }
 $('pdfBtn').onclick=function(){ savePdf(false); };
 $('pdfBwBtn').onclick=function(){ savePdf(true); };
@@ -1029,14 +1079,22 @@ function saveBoth(){
     navigator.share({files:[chof,pdff],title:name}).catch(function(){});
     return;
   }
-  [[new Blob([cur.text],{type:'text/plain'}),name+'.cho'],[new Blob([pdfBytes],{type:'application/pdf'}),name+'.pdf']].forEach(function(p,i){
-    setTimeout(function(){
-      var a=document.createElement('a'); a.href=URL.createObjectURL(p[0]); a.download=p[1];
-      document.body.appendChild(a); a.click();
-      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
-    }, i*400);
-  });
-  toast('Saved '+name+'.cho and '+name+'.pdf to Downloads.');
+  function dlBoth(){
+    [[new Blob([cur.text],{type:'text/plain'}),name+'.cho'],[new Blob([pdfBytes],{type:'application/pdf'}),name+'.pdf']].forEach(function(p,i){
+      setTimeout(function(){
+        var a=document.createElement('a'); a.href=URL.createObjectURL(p[0]); a.download=p[1];
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      }, i*400);
+    });
+    toast('Saved '+name+'.cho and '+name+'.pdf to Downloads.');
+  }
+  if(CAN_PICK_DIR){
+    saveInFolder([{name:name+'.cho',blob:new Blob([cur.text],{type:'text/plain'})},{name:name+'.pdf',blob:new Blob([pdfBytes],{type:'application/pdf'})}])
+      .then(function(done){ if(!done) dlBoth(); });
+    return;
+  }
+  dlBoth();
 }
 $('bothBtn').onclick=saveBoth;
 
@@ -1045,7 +1103,7 @@ var LIB_EXT=/\.(cho|chopro|crd|pro|txt)$/i;
 function setLibrary(items, name){
   library=items.map(function(it,i){
     var m=it.text.match(/\{\s*(?:title|t)\s*:\s*(.*?)\s*\}/i);
-    return {i:i, file:it.name, text:it.text, title:m&&m[1]?m[1]:it.name.replace(/\.[^.]+$/,''), plain:plainText(it.text)};
+    return {i:i, file:it.name, text:it.text, title:m&&m[1]?m[1]:it.name.replace(/\.[^.]+$/,''), plain:plainText(it.text),handle:it.handle};
   });
   libName=name||'';
   $('libBtn').textContent='Library: '+library.length+' songs';
@@ -1065,7 +1123,7 @@ async function readDir(dir,out,depth){
   for await (const entry of dir.entries()){
     var name=entry[0], h=entry[1];
     if(name.charAt(0)==='.'||name.charAt(0)==='_') continue;
-    if(h.kind==='file'){ if(LIB_EXT.test(name)){ var f=await h.getFile(); out.push({name:name,text:await f.text()}); } }
+    if(h.kind==='file'){ if(LIB_EXT.test(name)){ var f=await h.getFile(); out.push({name:name,text:await f.text(),handle:h}); } }
     else if(depth<2) await readDir(h,out,depth+1);
   }
 }
@@ -1594,10 +1652,14 @@ function saveImage(kind){
       navigator.share({files:[file],title:name}).catch(function(){});
       return;
     }
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+ext;
-    document.body.appendChild(a); a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
-    toast('Saved '+name+ext+' to your Downloads.');
+    function dl(){
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+ext;
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      toast('Saved '+name+ext+' to your Downloads.');
+    }
+    if(CAN_PICK_SAVE){ smartSave(blob,name+ext,type,ext).then(function(done){ if(!done) dl(); }); return; }
+    dl();
   }, type, 0.92);
 }
 $('exportBtn').onclick=function(e){
@@ -1623,9 +1685,23 @@ $('jpgBtn').onclick=function(){ saveImage('jpg'); };
 $('pngBtn').onclick=function(){ saveImage('png'); };
 
 /* import / export */
-$('impBtn').onclick=function(){ $('impFile').click(); };
-$('impFile').onchange=async function(){
-  var files=[].slice.call(this.files); this.value='';
+$('impBtn').onclick=async function(){
+  if(CAN_PICK_OPEN){
+    try{
+      var opts={multiple:true,id:'chordsheets-open',types:[{description:'Songs and chord sheets',accept:{
+        'text/plain':['.cho','.chopro','.crd','.pro','.txt'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document':['.docx'],
+        'application/pdf':['.pdf'],'application/rtf':['.rtf']}}]};
+      if(lastSourceHandle) opts.startIn=lastSourceHandle;
+      var hs=await window.showOpenFilePicker(opts);
+      var fs=await Promise.all(hs.map(function(h){ return h.getFile(); }));
+      importFiles(fs,hs); return;
+    }catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  $('impFile').click();
+};
+$('impFile').onchange=function(){ var f=[].slice.call(this.files); this.value=''; importFiles(f,[]); };
+async function importFiles(files,handles){
   if(!files.length) return;
   var added=0, notes=[], last=null;
   for(var i=0;i<files.length;i++){
@@ -1643,17 +1719,23 @@ $('impFile').onchange=async function(){
     }
     if(!/\{\s*(title|t)\s*:/i.test(text)) text='{title: '+f.name.replace(/\.[^.]+$/,'')+'}\n'+text;
     var s={id:uid(),text:text,steps:0,src:f.name}; songs.push(s); last=s; added++;
+    if(handles[i]) songHandle[s.id]=handles[i];
   }
+  if(last && songHandle[last.id]) rememberSource(songHandle[last.id]);
   if(last) select(last.id);
   if(notes.length) alert(notes.slice(0,6).join('\n\n')+(notes.length>6?'\n\n…and '+(notes.length-6)+' more.':''));
   else if(added) toast('Imported '+added+' file'+(added>1?'s':'')+'.');
-};
+}
 $('expBtn').onclick=function(){
   var name=(titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song';
   var blob=new Blob([cur.text],{type:'text/plain'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.cho';
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  function dl(){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+'.cho';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  }
+  if(CAN_PICK_SAVE){ smartSave(blob,name+'.cho','text/plain','.cho').then(function(done){ if(!done) dl(); }); return; }
+  dl();
 };
 
 /* phone: Edit / Sheet tabs */
