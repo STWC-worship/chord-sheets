@@ -83,6 +83,13 @@ main{flex:1;min-height:0;display:flex}
 pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;overflow:auto}
 .nochords .ch{display:none}
 
+#legalbar{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.35;padding:6px 12px;padding-bottom:max(6px,env(safe-area-inset-bottom));text-align:center}
+#legalbar a{color:var(--accent);margin-left:6px;white-space:nowrap}
+dialog#legend .notice{border:1px solid var(--line);border-left:4px solid var(--chord);background:var(--bg);border-radius:8px;padding:10px 14px;margin:12px 0}
+dialog#legend .notice h3{margin:0 0 6px;color:var(--ink)}
+dialog#legend .notice p{font-size:.88em;margin:6px 0}
+dialog#legend .notice .fine{color:var(--muted);font-size:.8em}
+.legalnote{margin:18px 0 0;padding-top:8px;border-top:1px solid var(--line);color:var(--muted);font-size:.62em;line-height:1.35}
 dialog#legend{overflow:hidden;border:1px solid var(--line);border-radius:12px;padding:0;max-width:640px;width:calc(100% - 24px);max-height:86vh;background:var(--panel);color:var(--ink)}
 dialog#legend::backdrop{background:rgba(0,0,0,.45)}
 dialog#legend .lg{padding:18px 20px 22px;overflow:auto;max-height:86vh}
@@ -118,6 +125,8 @@ dialog#legend li{margin:5px 0}
 }
 
 @media print{
+  #legalbar{display:none!important}
+  .legalnote{color:#444!important;border-top-color:#999!important}
   @page{margin:.6in}
   html,body{height:auto;background:#fff;display:block}
   header.bar,#editorPane,#toast{display:none!important}
@@ -214,6 +223,13 @@ dialog#legend li{margin:5px 0}
   <div class="lg">
     <h2>Legend: how to type a song</h2>
     <p class="lead">You only need to know a few things. Everything else is optional.</p>
+    <div class="notice" id="legalNotice">
+      <h3>Important notice: copyrighted music</h3>
+      <p><b>No license is granted.</b> Chord Sheet Pro is a tool for arranging, converting and formatting chord sheets. It does not give you, and nothing in it grants, any license, right or permission to copy, display, project, perform, print, record, stream, teach from or distribute any song, lyric, melody, chord chart or other copyrighted work.</p>
+      <p><b>You are responsible for permission.</b> Songs, lyrics, melodies and arrangements belong to their authors, composers, publishers and other rights holders. Anyone who uses chord sheets or lyrics created, imported, converted, stored or exported with this app in any public or shared setting, including church services and congregational worship, rehearsals shared with others, lessons and teaching, classes, broadcasts, livestreams, recordings, and any printed or digital distribution, must first obtain the license or licenses that apply (for example a CCLI Church Copyright License, a CCLI Streaming or Rehearsal license, or another license) or the direct written permission of the copyright holder, and must follow the terms of that license, including any reporting. A church license generally covers congregational singing at that church and does not by itself cover private lessons, studio teaching, choir or ensemble copying, or distribution to others.</p>
+      <p><b>No warranty.</b> Chords, keys, tempos, authorship, copyright and CCLI information in this app may be incomplete or wrong and are provided for convenience only. Verify them with the publisher or CCLI SongSelect. This app and its makers, including Spirit and Truth Worship Consulting, make no representations or warranties of any kind, and are not liable for any claim, loss or damage arising from the use of this app, its output, or any song material, including any claim of copyright infringement by a user. By using this app you accept these terms and agree to use it only with material you have the right to use.</p>
+      <p class="fine">This notice is a general statement and is not legal advice.</p>
+    </div>
 
     <h3>1. Chords go in square brackets</h3>
     <p>Put the chord right before the word (or the sound) it belongs on.</p>
@@ -275,6 +291,7 @@ short forms:  {sov} {eov}   {soc} {eoc}   {sob} {eob}</pre>
     <p><button id="legendClose" class="primary">Close</button></p>
   </div>
 </dialog>
+<footer id="legalbar"><span>For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.</span> <a href="#" id="legalLink">Read the full notice</a></footer>
 <div id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
 
 <script>
@@ -491,6 +508,7 @@ function render(){
     h+='</div>';
   });
   h+='</div>';
+  h+='<p class="legalnote">For licensed use only. Public use of these songs requires a CCLI license or the copyright holder\'s permission.</p>';
   var sheet=document.getElementById('sheet');
   sheet.innerHTML=h;
   sheet.style.fontSize=settings.size+'px';
@@ -656,6 +674,7 @@ $('help').onclick=function(){
   var d=$('legend');
   if(d.showModal) d.showModal(); else d.setAttribute('open','');
 };
+$('legalLink').onclick=function(e){ e.preventDefault(); $('help').click(); setTimeout(function(){ var n=$('legalNotice'); if(n&&n.scrollIntoView) n.scrollIntoView(); },60); };
 $('legendClose').onclick=function(){ var d=$('legend'); if(d.close) d.close(); else d.removeAttribute('open'); };
 $('legend').addEventListener('click',function(e){ if(e.target===this && this.close) this.close(); });
 
@@ -949,6 +968,7 @@ function buildPdf(bw){
     });
     return ops;
   });
+  pageOps.forEach(function(ops){ ops.push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 20 Td ('+pdfStr("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.")+') Tj ET'); });
   var objs=[], n=pageOps.length;
   objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
   var kids=[]; for(var i=0;i<n;i++) kids.push((6+i*2)+' 0 R');
@@ -1642,8 +1662,10 @@ function sheetToCanvas(){
     });
     if(ok && y<H-M){
       var h=Math.max(Math.ceil(y+M*0.5),900);
+      h+=44;
       out=document.createElement('canvas'); out.width=W; out.height=h;
       var og=out.getContext('2d'); og.fillStyle='#fff'; og.fillRect(0,0,W,h); og.drawImage(cv,0,0);
+      og.fillStyle='#555'; og.font='700 22px '+FONT; og.textAlign='center'; og.fillText("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.",W/2,h-18); og.textAlign='left';
     }
   }
   if(!out) throw new Error('song is too long for one picture');
