@@ -147,7 +147,8 @@ dialog#legend li{margin:5px 0}
     <span class="menuwrap">
       <button id="exportBtn" class="primary" aria-haspopup="true" aria-expanded="false">Export ▾</button>
       <div id="exportMenu" role="menu" hidden>
-        <button data-act="pdfBtn" role="menuitem"><b>PDF</b><small>colors included</small></button>
+        <button data-act="pdfBtn" role="menuitem"><b>PDF (color)</b><small>chords and headings in color</small></button>
+        <button data-act="pdfBwBtn" role="menuitem"><b>PDF (black and white)</b><small>for plain printers</small></button>
         <button data-act="jpgBtn" role="menuitem"><b>Picture (JPG)</b><small>for upload forms</small></button>
         <button data-act="pngBtn" role="menuitem"><b>Picture (PNG)</b><small>sharper text</small></button>
         <button data-act="expBtn" role="menuitem"><b>ChordPro file (.cho)</b><small>for keeping and sharing</small></button>
@@ -157,7 +158,7 @@ dialog#legend li{margin:5px 0}
       </div>
     </span>
     <span hidden>
-      <button id="pdfBtn" type="button">Save PDF</button><button id="printBtn" type="button">Print</button>
+      <button id="pdfBtn" type="button">Save PDF</button><button id="pdfBwBtn" type="button">PDF b/w</button><button id="printBtn" type="button">Print</button>
       <button id="jpgBtn" type="button">JPG</button><button id="pngBtn" type="button">PNG</button>
       <button id="shareBtn" type="button">Share</button><button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
     </span>
@@ -710,7 +711,7 @@ function pdfRgb(hex){
    2. Only a section taller than a whole column may be split, and only between its paragraphs.
    3. If the next section will not fit under the last one, the page goes to two columns so it stays on the page.
    4. Never more than two pages. Lyric lines are not wrapped unless the text would get too small. */
-var PDF_PW=612, PDF_PH=792, PDF_MG=40, PDF_GUT=26;
+var PDF_PW=612, PDF_PH=792, PDF_MG=40, PDF_GUT=26, PDF_BW=false;
 function pdfHeader(song,fs){
   var m=song.meta, head=[], hh=0, BLACK='0 0 0';
   var tSize=fs*1.45; head.push({t:m.title||'Untitled',size:tSize,font:'F2',color:BLACK,y:hh+tSize}); hh+=tSize*1.25;
@@ -726,7 +727,8 @@ function pdfHeader(song,fs){
 }
 // one section = one block of rows; paras are the paragraphs inside it (split at blank lines)
 function pdfBlocks(song,fs,colW){
-  var CS=fs*0.88, CHORD=pdfRgb(settings.chordColor), LABEL=pdfRgb(settings.labelColor), BLACK='0 0 0';
+  var CS=fs*0.88, BLACK='0 0 0';
+  var CHORD=PDF_BW?BLACK:pdfRgb(settings.chordColor||'#b3261e'), LABEL=PDF_BW?BLACK:pdfRgb(settings.labelColor||'#1f5fbf');
   function op(font,size,str,x,y,color){ return 'BT /'+font+' '+size.toFixed(2)+' Tf '+color+' rg '+x.toFixed(1)+' '+y.toFixed(1)+' Td ('+pdfStr(str)+') Tj ET'; }
   function wrapPlain(t,size){
     var words=t.split(' '), rows=[], cur='';
@@ -859,54 +861,67 @@ function pdfPlan(song){
     }
     return null;
   }
-  var configs=[
-    {pc:[1],w:1.0},{pc:[2],w:0.92},
-    {pc:[1,1],w:0.85},{pc:[2,1],w:0.80},{pc:[1,2],w:0.78},{pc:[2,2],w:0.72}
-  ];
-  function best(list,allowWrap,floor){
-    var out=null;
-    list.forEach(function(cf){
-      var f=maxFs(cf.pc,allowWrap,floor);
-      if(f!==null){ var sc=f*cf.w; if(!out||sc>out.score) out={fs:f,pageCols:cf.pc,score:sc}; }
+  // average text size across the rows of the sheet (so a big page and a small page are judged fairly)
+  function avgFs(fl,spec){
+    var tot=0, w=0;
+    fl.pages.forEach(function(pg,i){
+      var r=0; pg.forEach(function(it){ if(!it.e.gap && !it.e.blank && it.e.h>0) r++; });
+      var f=Array.isArray(spec)?spec[Math.min(i,spec.length-1)]:spec;
+      tot+=r*f; w+=r;
     });
-    return out;
+    return w?tot/w:0;
   }
-  // page 1 in two columns (no wrapped lines), the wide sections on a single-column page 2, each page at its own size
-  function twoColPageOne(){
-    var out=null, f1, f2;
-    for(f1=16; f1>=9; f1-=0.5){
-      for(f2=MAXFS; f2>=MINFS; f2-=0.5){
-        var fl=pdfFlow(song,[f1,f2],[2,1]);
-        if(fl.n<=2 && !fl.overflow && !fl.wraps){
-          if(!out || f1+f2>out.sum) out={fs:[f1,f2],pageCols:[2,1],sum:f1+f2};
-          break;
-        }
+  // best sizes for each page of a layout, judged by the average size; sections stay whole, no wrapped lines
+  function bestPerPage(pc,minF1,minF2,maxF1){
+    var best=null;
+    function tryIt(f1,f2){
+      var fl=pdfFlow(song,[f1,f2],pc);
+      if(fl.n<=pc.length && !fl.overflow && !fl.wraps){
+        var a=avgFs(fl,[f1,f2]);
+        if(!best || a>best.avg) best={fs:[f1,f2],pageCols:pc,avg:a};
       }
     }
-    return out;
+    var f1,f2;
+    for(f1=maxF1; f1>=minF1; f1-=1) for(f2=MAXFS; f2>=minF2; f2-=1) tryIt(f1,f2);
+    if(best){                                                       // refine around the winner
+      var c=best.fs;
+      for(f1=c[0]+1; f1>=c[0]-1; f1-=0.5) for(f2=c[1]+1; f2>=c[1]-1; f2-=0.5){
+        if(f1>=minF1 && f2>=minF2 && f1<=maxF1 && f2<=MAXFS) tryIt(f1,f2);
+      }
+    }
+    return best;
   }
-  var one=best(configs.slice(0,2),false,MINFS);                     // one page, no wrapped lines, readable
-  if(one) return one;
-  var twoA=best([configs[2]],false,MINFS);                          // two pages, one column each
-  if(twoA){
-    var fa=pdfFlow(song,twoA.fs,[1,1]);
-    if(fa.fill1>=0.985) return twoA;                                // page 1 completely full: keep one column
-    // a section got pushed to page 2 and left room behind: use two columns on page 1 so nothing is pushed
-    var tc=twoColPageOne();
-    if(tc && tc.fs[0]>=9.5) return tc;
-    var twoB=best([configs[3]],true,10);                            // otherwise allow a few wrapped lines
-    if(twoB && twoB.fs>=twoA.fs*0.8) return twoB;
-    return twoA;
-  }
-  var two=best(configs.slice(3),false,MINFS);
-  if(two) return two;
-  var any=best(configs,true,9);                                     // allow wrapped lines, down to 9 pt
+  var configs=[{pc:[1],w:1.0},{pc:[2],w:0.92}];
+  var one=null;
+  configs.forEach(function(cf){
+    var f=maxFs(cf.pc,false,MINFS);
+    if(f!==null){ var sc=f*cf.w; if(!one||sc>one.score) one={fs:f,pageCols:cf.pc,score:sc}; }
+  });
+  if(one) return one;                                               // one page, no wrapped lines, readable
+
+  // two pages: whichever layout gives the biggest average type, keeping every section whole
+  var A=bestPerPage([1,1],10,10,MAXFS);                             // one column on both pages
+  var B=bestPerPage([2,1],9.5,10,16);                               // page 1 in two columns
+  var pick=null;
+  if(A) pick={fs:A.fs,pageCols:A.pageCols,score:A.avg};
+  if(B && (!pick || B.avg*0.95>pick.score)) pick={fs:B.fs,pageCols:B.pageCols,score:B.avg*0.95};
+  if(pick) return pick;
+  var any=null;                                                     // allow wrapped lines, down to 9 pt
+  [[1,1],[2,1],[1,2],[2,2]].forEach(function(pc){
+    var f=maxFs(pc,true,9);
+    if(f!==null && (!any || f>any.fs)) any={fs:f,pageCols:pc};
+  });
   if(any) return any;
-  var tiny=best(configs,true,4);                                    // last resort for very long songs
+  var tiny=null;                                                    // last resort for very long songs
+  [[2,2],[1,2],[2,1],[1,1]].forEach(function(pc){
+    var f=maxFs(pc,true,4);
+    if(f!==null && (!tiny || f>tiny.fs)) tiny={fs:f,pageCols:pc};
+  });
   return tiny||{fs:4,pageCols:[2,2]};
 }
 var NON_LATIN=/[^\u0000-ɏ‐-‧♭♯]/;
-function buildPdf(){
+function buildPdf(bw){
+  PDF_BW=!!bw;
   render();                                   // refresh CTX (key, transpose, display mode)
   if(NON_LATIN.test(cur.text)) return imagePdf(sheetToCanvas());   // Chinese etc: the PDF fonts cannot draw it, use a picture page
   var song=parse(cur.text), plan=pdfPlan(song), L=pdfFlow(song,plan.fs,plan.pageCols);
@@ -970,10 +985,10 @@ function imagePdf(canvas){
   parts.forEach(function(u){ out.set(u,pos); pos+=u.length; });
   return out;
 }
-function savePdf(){
+function savePdf(bw){
   var bytes;
-  try{ bytes=buildPdf(); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
-  var name=(titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song';
+  try{ bytes=buildPdf(bw===true); }catch(e){ toast('Could not build the PDF: '+e.message); return; }
+  var name=((titleOf(cur)||'song').replace(/[\\/:*?"<>|]+/g,'').trim()||'song')+(bw===true?' (black and white)':'');
   var blob=new Blob([bytes],{type:'application/pdf'});
   var file=null;
   try{ file=new File([blob],name+'.pdf',{type:'application/pdf'}); }catch(e){}
@@ -986,7 +1001,8 @@ function savePdf(){
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
   toast('PDF saved to your Downloads.');
 }
-$('pdfBtn').onclick=savePdf;
+$('pdfBtn').onclick=function(){ savePdf(false); };
+$('pdfBwBtn').onclick=function(){ savePdf(true); };
 
 $('songSearch').oninput=function(){ refreshList(); };
 $('songSearch').onkeydown=function(e){
