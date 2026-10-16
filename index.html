@@ -429,6 +429,7 @@ function parse(text){
       if(n==='comment'){ if(!blk||blk.implicit){ open('verse','',true); } blk.lines.push({note:v}); return; }
       if(/^start_of_(chorus|verse|bridge|tab)$/.test(n)){ open(n.slice(9),v,false); return; }
       if(/^end_of_/.test(n)){ blk=null; return; }
+      if(n==='meta'){ var mm=v.match(/^(\S+)\s+(.*)$/); if(mm) meta[mm[1].toLowerCase()]=mm[2]; return; }
       meta[n]=v; return;
     }
     var hd=headingOf(raw, wasBlank);
@@ -474,6 +475,10 @@ function renderLine(text, st, flats){
   return '<div class="ln">'+html+'</div>';
 }
 
+function creditLine(m){
+  var a=[]; if(m.copyright) a.push(m.copyright); if(m.ccli) a.push('CCLI Song # '+m.ccli);
+  return a.join('  |  ');
+}
 function render(){
   var text=cur.text, song=parse(text), m=song.meta, flats=useFlats(m,text), h='';
   CTX={mode:settings.show,key:keyIdx(m),steps:steps,flats:flats};
@@ -481,6 +486,7 @@ function render(){
   h+='<h1>'+esc(title)+'</h1>';
   if(m.subtitle) h+='<p class="sub">'+esc(m.subtitle)+'</p>';
   if(m.artist) h+='<p class="sub">'+esc(m.artist)+'</p>';
+  if(m.composer) h+='<p class="sub">Words and music: '+esc(m.composer)+'</p>';
   var bits=[];
   if(m.key){
     var k=tChord(m.key,steps,flats);
@@ -508,6 +514,7 @@ function render(){
     h+='</div>';
   });
   h+='</div>';
+  if(creditLine(m)) h+='<p class="legalnote">'+esc(creditLine(m))+'</p>';
   h+='<p class="legalnote">For licensed use only. Public use of these songs requires a CCLI license or the copyright holder\'s permission.</p>';
   var sheet=document.getElementById('sheet');
   sheet.innerHTML=h;
@@ -752,6 +759,7 @@ function pdfHeader(song,fs){
   if(m.capo) bits.push('Capo '+m.capo);
   if(m.tempo) bits.push('Tempo '+m.tempo);
   if(m.time) bits.push('Time '+m.time);
+  if(m.composer){ head.push({t:'Words and music: '+m.composer,size:fs*0.72,font:'F3',color:BLACK,y:hh+fs*0.72}); hh+=fs*1.0; }
   if(bits.length){ head.push({t:bits.join('    '),size:fs*0.8,font:'F3',color:BLACK,y:hh+fs*0.8}); hh+=fs*1.1; }
   return {head:head,hh:hh+fs*0.5};
 }
@@ -968,6 +976,8 @@ function buildPdf(bw){
     });
     return ops;
   });
+  var credit=creditLine(song.meta);
+  if(credit && pageOps.length) pageOps[pageOps.length-1].push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 30 Td ('+pdfStr(credit)+') Tj ET');
   pageOps.forEach(function(ops){ ops.push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 20 Td ('+pdfStr("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.")+') Tj ET'); });
   var objs=[], n=pageOps.length;
   objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
@@ -1662,10 +1672,10 @@ function sheetToCanvas(){
     });
     if(ok && y<H-M){
       var h=Math.max(Math.ceil(y+M*0.5),900);
-      h+=44;
+      var credit=creditLine(m); h+=credit?74:44;
       out=document.createElement('canvas'); out.width=W; out.height=h;
       var og=out.getContext('2d'); og.fillStyle='#fff'; og.fillRect(0,0,W,h); og.drawImage(cv,0,0);
-      og.fillStyle='#555'; og.font='700 22px '+FONT; og.textAlign='center'; og.fillText("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.",W/2,h-18); og.textAlign='left';
+      og.fillStyle='#555'; og.font='700 22px '+FONT; og.textAlign='center'; if(credit) og.fillText(credit,W/2,h-48); og.fillText("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.",W/2,h-18); og.textAlign='left';
     }
   }
   if(!out) throw new Error('song is too long for one picture');
