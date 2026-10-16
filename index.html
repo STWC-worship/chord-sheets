@@ -182,6 +182,7 @@ dialog#legend li{margin:5px 0}
     </span>
   </div>
   <div class="row more" id="more">
+    <button id="infoBtn" title="Authors, CCLI, copyright, tempo, arranger">Song info</button>
     <button id="newBtn">New</button>
     <button id="dupBtn">Copy</button>
     <button id="delBtn">Remove</button>
@@ -219,6 +220,20 @@ dialog#legend li{margin:5px 0}
   <section id="sheetPane"><article id="sheet"></article></section>
 </main>
 
+<dialog id="songinfo">
+  <div class="lg">
+    <h2>Song info</h2>
+    <p class="lead" id="siFound"></p>
+    <label>Authors (true songwriters)<input id="siAuth" type="text"></label>
+    <label>Arranged by (your own arrangement)<input id="siArr" type="text" placeholder="e.g. J. Tsai"></label>
+    <label>Copyright line<input id="siCopy" type="text" placeholder="© 2008 Publisher"></label>
+    <label>CCLI song number<input id="siNum" type="text" inputmode="numeric"></label>
+    <label>Tempo (BPM)<input id="siBpm" type="text" inputmode="numeric"></label>
+    <label>Your church or ministry CCLI license number (saved on this device only)<input id="siLic" type="text" inputmode="numeric"></label>
+    <p class="fine">Look it up: <a id="siLinkC" target="_blank" rel="noopener">SongSelect</a> · <a id="siLinkP" target="_blank" rel="noopener">PraiseCharts</a> · <a id="siLinkL" target="_blank" rel="noopener">Search the first line</a>. The first line of the verse and chorus tells similar titles apart. Verify before relying on it.</p>
+    <p><button id="siApply" class="primary">Apply to this song</button> <button id="siClose">Close</button></p>
+  </div>
+</dialog>
 <dialog id="legend">
   <div class="lg">
     <h2>Legend: how to type a song</h2>
@@ -476,7 +491,7 @@ function renderLine(text, st, flats){
 }
 
 function creditLine(m){
-  var a=[]; if(m.copyright) a.push(m.copyright); if(m.ccli) a.push('CCLI Song # '+m.ccli);
+  var a=[]; if(m.copyright) a.push(m.copyright); if(m.ccli) a.push('CCLI Song # '+m.ccli); var lic=LS.get('cs.license'); if(lic) a.push('CCLI License # '+lic);
   return a.join('  |  ');
 }
 function render(){
@@ -486,7 +501,7 @@ function render(){
   h+='<h1>'+esc(title)+'</h1>';
   if(m.subtitle) h+='<p class="sub">'+esc(m.subtitle)+'</p>';
   if(m.artist) h+='<p class="sub">'+esc(m.artist)+'</p>';
-  if(m.composer) h+='<p class="sub">Words and music: '+esc(m.composer)+'</p>';
+  if(m.composer) h+='<p class="sub">Words and music: '+esc(m.composer)+(m.arranger?'; arr. '+esc(m.arranger):'')+'</p>';
   var bits=[];
   if(m.key){
     var k=tChord(m.key,steps,flats);
@@ -622,6 +637,50 @@ src.addEventListener('input',function(){
   cur.text=src.value; cur.steps=steps; render(); saveAll();
   var o=$('songSel').querySelector('option[value="'+cur.id+'"]'); if(o) o.textContent=titleOf(cur);
 });
+
+/* ---------- song info ---------- */
+var INFO=[{"t":"He Knows My Name","a":"Tommy Walker","n":"2151368","c":"© 1996 Universal Music - Brentwood Benson Songs (Admin. by Brentwood-Benson Music Publishing, Inc.)","k":"E"},{"t":"Alabaster Jar","a":"Walker Beach; Zach Neese","n":"4887630","c":"© 2005 Gateway Create Publishing (Admin. by Integrity Music)","k":"G"},{"t":"Amazing Grace","a":"John Newton (words, 1779, st. 1-4); st. 5 \"A Collection of Sacred Ballads\" 1790 (often attributed to John P. Rees); tune NEW BRITAIN, American folk me"},{"t":"My Jesus, I Love Thee","a":"Shane Barnard, William Featherstone (arr. Dustin Loehrs, Daniel Galbraith)","n":"7160190","c":"© 2019 Songs From Wellhouse (Admin. by Capitol CMG Publishing)","k":"Bb"},{"t":"Be Thou My Vision","a":"Eleanor Hull, Mary Byrne (arr. David Shipps)","n":"4669652","c":"© 2006 PraiseCharts Publishing, Inc.","k":"Eb"},{"t":"I Fall Down","a":"Shonelle Barnes","n":"2396415","k":"A"},{"t":"One Pure And Holy Passion","a":"Mark Altrogge","n":"270224","k":"A"},{"t":"Lord Reign In Me","a":"Brenton Brown","n":"2490706","c":"© 1998 Vineyard Songs (UK/Eire) (Admin. by Integrity Music)","k":"C"},{"t":"Desert Song","a":"Brooke Fraser","n":"5060793","c":"© 2008 Hillsong Publishing","k":"D"},{"t":"I Will Call Upon The Lord","a":"Michael O'Shields (text arranged and tune, 1981); stanzas 2-3 author unknown (hymnary credits Pam Stephenson as arranger of the tune)","n":"11263","c":"© 1981 Sound III, Inc.","k":"D"},{"t":"Awesome God","a":"Rich Mullins","n":"41099","c":"© 1988 BMG Songs, Inc. (ASCAP) (admin. Brentwood-Benson Music Publishing)","b":"150","k":"E"},{"t":"Jesus Loves Me","a":"Anna Bartlett Warner (text, stanzas 1-2, 1859; from the novel Say and Seal); William B. Bradbury (tune and refrain, 1861); David R. McGuire (stanza 3,","k":"C"},{"t":"Indescribable","a":"Laura Story; Jesse Reeves","n":"4403076","c":"© 2004 Laura Stories, sixsteps Music, worshiptogether.com songs (admin. by Capitol CMG Publishing)","b":"90","k":"Bb"},{"t":"Amazed","a":"Jared Anderson","n":"4221021","b":"77","k":"D"},{"t":"Be The Center","a":"Michael Frye","n":"2650429","c":"© 1999 Vineyard Songs (UK/Eire) (admin. by Integrity Music)","b":"76","k":"D"},{"t":"Father I Adore You","a":"Terrye Coelho","n":"26557","k":"F"},{"t":"Christ is Mine Forevermore","a":"Jonny Robinson, Rich Thompson (CityAlight)","n":"7036096","c":"© 2016 CityAlight Music (Admin. by Integrity Music Publishing)","k":"Bb"},{"t":"Nothing Without You","a":"Bebo Norman, Mitch Goskie","n":"4442453","c":"© 2004 New Spring/Appstreet Music and Rotten Banana Music (both Admin. by Brentwood-Benson Music Publishing, Inc.)","k":"D"},{"t":"May the Words of My Mouth","a":"Tim Hughes, Rob Hill","n":"3232310","k":"C"},{"t":"Joy to the World, Joyful Joyful","a":"Isaac Watts, Henry Van Dyke, Phil Wickham","n":"7128618","c":"© 2018 Phil Wickham Music (Admin by Essential Music Publishing)","k":"Db"},{"t":"Light of the World","a":"Tim Hughes","n":"3266032","c":"© 2000 Thankyou Music (Admin. by Capitol Christian Music Publishing)","k":"E"},{"t":"Everyday","a":"Joel Houston","n":"2798154","c":"© 1999 Joel Houston/Hillsong Publishing (Admin. in U.S. & Canada by Integrity's Hosanna! Music)","k":"B"},{"t":"Build Your Kingdom Here","a":"Rend Collective (credited as group; individual writers not shown on listing)","n":"6186078","c":"© 2012 Thankyou Music (PRS) (Admin Capitol CMG)","k":"D"},{"t":"Christ Is Enough","a":"Jonas Myrin, Reuben Morgan","n":"6514035","c":"© 2012 Hillsong Publishing (Admin by Essential Music Publishing)","k":"B"},{"t":"Jesus Lover of My Soul","a":"Paul Oakley","n":"1545484","c":"© 1995 Kingsways Thankyou Music (adm. EMI Christian Music Publishing)","k":"C"},{"t":"Overcome","a":"Jon Egan","n":"5064359","c":"© 2007 Integrity Worship Music (Admin. by Capitol CMG Publishing)","k":"B"},{"t":"God I Look to You","a":"Jenn Johnson, Ian McIntosh","n":"5858163","c":"© 2010 Bethel Music (Admin. by Bethel Music Publishing)","k":"B"},{"t":"Oh Lord You're Beautiful","a":"Keith Green","n":"14514","c":"© 1980 Ears To Hear Music (Admin. by Capitol CMG Publishing)","k":"A"},{"t":"My Glorious","a":"Martin Smith, Stu Garrard","n":"3187575","c":"© 2000 Curious? Music UK (Admin. by Capitol Christian Music Publishing)","k":"A"},{"t":"O Come to the Altar","a":"Chris Brown, Steven Furtick, Mack Brock, Wade Joye","n":"7051511","c":"© 2025 Integrity Music on Integrity page (earlier published as Elevation Worship Publishing/Essential Music; exact original line not seen)","k":"B"},{"t":"Here Is Our King","a":"David Crowder","n":"4490962","c":"© 2005 worshiptogether.com songs and sixsteps Music (Admin. by Capitol Christian Music Publishing)","k":"Bb"},{"t":"It Is Well","a":"Kristene DiMarco (PraiseCharts author credit); Wikipedia notes interpolated hymn \"It Is Well with My Soul\" by Horatio Spafford (words) and Philip Blis","n":"7021972","c":"© 2013 Bethel Music Publishing","k":"G"},{"t":"And Can It Be","a":"Words: Charles Wesley (1738); Music: Thomas Campbell (SAGINA, 1825); PraiseCharts arrangement by Daniel Galbraith","c":"© 2008 PraiseCharts Publishing, Inc. (arrangement); words and tune public domain","k":"F"},{"t":"With All I Am","a":"Reuben Morgan","n":"4257734","c":"© 2003 Reuben Morgan/Hillsong Publishing (US/Canada admin. Integrity's Hosanna! Music)","k":"D"},{"t":"Center","a":"Charlie Hall, Matt Redman (Center); Turn Your Eyes Upon Jesus: Helen Howarth Lemmel (words and music, 1922, hymn)","c":"© 2006 worshiptogether.com songs, sixsteps Music and Thankyou Music (EMI Christian Music Publishing admin.)","b":"112","k":"E"},{"t":"Unto Your Name","a":"Ben Smith, Pat Barrett","n":"7036674","c":"© 2013 Capitol CMG Genesis, Housefires Sounds (admin. Capitol CMG Publishing), Bread & Wine Sounds (admin. Watershed Music Publishing)","k":"C"},{"t":"More Than Life","a":"Reuben Morgan (Hillsong Worship \"For All You've Done\" listing); a Hillsong UNITED listing adds Martin Smith as co-writer","n":"4222051","k":"F"},{"t":"A Broken Spirit","a":"Don Harris; Martin J. Nystrom","n":"1175287","c":"© 1993 Integrity's Hosanna! Music","k":"F"},{"t":"Show Us Christ","a":"Bob Kauflin; Doug Plank","n":"6169253","k":"A"},{"t":"Open My Eyes","a":"Braden Lang; Reuben Morgan","n":"5636873","k":"G"},{"t":"Days of Elijah","a":"Robin Mark","n":"1537904","k":"Bb"},{"t":"Power of Your Love","a":"Geoff Bullock","n":"917491","k":"G"},{"t":"Spirit Break Out","a":"Luke Hellebronth; Tim Hughes; Myles Dhillon; Ben Bryant","n":"6058450","k":"B"},{"t":"For the Cross","a":"Jenn Johnson; Brian Johnson; Gabriel Wilson; Ian McIntosh","n":"7001238","k":"F"},{"t":"I Surrender","a":"David Leonard, Jason Ingram, Leslie Jordan","n":"7060165","k":"C"},{"t":"No Longer Slaves","a":"Jonathan David Helser, Brian Johnson, Joel Case","n":"7030123","k":"Bb"},{"t":"Good Good Father","a":"Pat Barrett, Anthony Brown","n":"7036612","k":"A"},{"t":"Stronger","a":"Ben Fielding, Reuben Morgan","n":"5060810","k":"C"},{"t":"Here I Am To Worship","a":"Tim Hughes","n":"3266032","b":"75","k":"G"},{"t":"Use Me","a":"Dewitt Jones, Ron Kenoly"},{"t":"Praise Will Be My Song","a":"Bryan Torwalt, Katie Torwalt","n":"7065991","k":"A"},{"t":"Much Of You","a":"Steven Curtis Chapman","n":"4399018"},{"t":"I Could Sing of Your Love Forever","a":"Martin Smith","n":"1043199","b":"96","k":"F"},{"t":"Shout To The Lord","a":"Darlene Zschech","n":"1406918","c":"© 1993 Wondrous Worship (Admin. by Reservoir Media Management, Inc.)","b":"86","k":"Db"},{"t":"Alive in You","a":"Kim Walker-Smith, Skyler Smith, Jordan Frye","n":"7054536","c":"© 2015 Jesus Culture Music, Capitol CMG Genesis (Admin Capitol CMG Publishing)","k":"G"},{"t":"Seas of Crimson","a":"Daniel Bashta, Brian Johnson, Joel Taylor, Bobby Strand","n":"7030072","c":"© 2014 Bethel Music Publishing (ASCAP), GoForth Sounds (ASCAP) (Adm. by Bethel Music Publishing)","k":"A"},{"t":"My Redeemer Lives","a":"Reuben Morgan","n":"2397964","c":"© 1998 Reuben Morgan/Hillsong Publishing (Admin. in U.S. & Canada by Integrity's Hosanna! Music)","k":"E"},{"t":"Lamb of God","a":"Twila Paris (words and music)","n":"16787","b":"48","k":"D"},{"t":"Never Lost","a":"Catherine Mullins, Rita Springer, Chandler Moore","n":"7058134","c":"© 2015 Gateway Create Publishing (Admin by Capitol CMG Publishing); also Awaken a Generation Music, CMullins Publishing, Watershed Music Publishing","k":"D"},{"t":"Running in Circles","a":"Will Reagan","n":"5910881","b":"56","k":"G"},{"t":"This I Believe","a":"Ben Fielding, Matt Crocker","n":"7018338","b":"71","k":"C"},{"t":"Come to the Water","a":"Kristian Stanfill, Brett Younker","n":"6364481","c":"© 2012 worshiptogether.com Songs (ASCAP) sixsteps Music (ASCAP), admin. EMICMGPublishing.com","k":"C"},{"t":"10,000 Reasons","a":"Matt Redman, Jonas Myrin","n":"6016351"},{"t":"Take the World but Give Me Jesus","a":"Fanny J. Crosby (text), John R. Sweney (tune); a Sovereign Grace lead sheet adds David LaChance Jr. (arrangement/music)"},{"t":"Open the Eyes of My Heart","a":"Paul Baloche","n":"2298355","c":"© 1997 Integrity's Hosanna! Music (ASCAP), admin. Capitol CMG Publishing","k":"E"},{"t":"Scandal of Grace","a":"Joel Houston, Matt Crocker","n":"6428750","k":"C"},{"t":"All I Am","a":"Mallory Wickham, Phil Wickham"},{"t":"Holy Spirit, Living Breath of God","a":"Keith Getty; Stuart Townend","n":"4779872","c":"© 2006 Thankyou Music (Admin. by Capitol CMG Publishing)","b":"152","k":"D"},{"t":"Good Shepherd of My Soul","a":"Fionan De Barra; Keith Getty; Kristyn Getty; Stuart Townend","n":"7016389","c":"© 2013 De Barra, Fionan, Gettymusic, Townend Songs (Admin. by Capitol CMG Publishing)"},{"t":"Open Up Our Eyes","a":"Chris Brown; London Gatch; Mack Brock; Stuart Garrard; Wade Joye","n":"6386696","c":"© 2012 Elevation Worship Publishing, Essential Music (Admin by Essential Music Publishing)","b":"85","k":"B"},{"t":"Forever","a":"Brian Johnson; Kari Jobe; Jenn Johnson; Gabriel Wilson; Joel Taylor; Christa Black Gifford","n":"7001228","c":"© 2013 Worship Together Music (Admin by Capitol CMG Publishing); Bethel Music Publishing","b":"72","k":"Ab"},{"t":"Believe","a":"Reuben Morgan; Darlene Zschech","n":"5637511","c":"© 2009 Hillsong Music Publishing Australia (Admin. by Capitol CMG Publishing); Wondrous Worship (Admin. by Reservoir Media Management, Inc.)","b":"79","k":"C"},{"t":"Lord I Need You","a":"Matt Maher; Christy Nockels; Jesse Reeves; Kristian Stanfill (WorshipTogether also lists Daniel Carson)","n":"5925687","c":"© 2010 worshiptogether.com Songs, sixsteps Music, Thankyou Music, Valley of Songs Music, Sweater Weather (Admin by Capitol CMG Publishing)","b":"74","k":"Bb"},{"t":"Man Of Sorrows","a":"Brooke Ligertwood; Matt Crocker","n":"6476063","c":"© 2012 Hillsong Music Publishing (admin. Capitol CMG Publishing)","b":"72","k":"F"},{"t":"Jesus, Firm Foundation","a":"Bryan Brown; Tony Wood; Jason Ingram","n":"6472799","c":"© 2012 worshiptogether.com songs (Admin. by Capitol CMG Publishing); All Essential Music, Open Hands Music, So Essential Tunes, Songs From Exit 71 (Ad","b":"78","k":"C"},{"t":"This I Believe","a":"Ben Fielding; Matt Crocker","n":"7018338","c":"© 2014 Hillsong Music Publishing (Admin by Essential Music Publishing)","b":"71","k":"G"},{"t":"Good Good Father","a":"Pat Barrett; Anthony Brown","n":"7036612","c":"© 2014 Capitol CMG Paragon, Housefires Sounds et al. (Admin. by Capitol CMG Publishing)","k":"Bb"},{"t":"Great Is Thy Faithfulness","a":"Thomas O. Chisholm (words); William M. Runyan (music, tune FAITHFULNESS)","n":"18723","k":"C"},{"t":"Love Ran Red / You Gave Your Life","a":"Ed Cash; Matt Armstrong; Chris Tomlin; Matt Redman; Jonas Myrin","n":"7017786","c":"© 2014 McKittrick Music, Universal Music - Brentwood Benson Publishing et al. (Admin. by Capitol CMG Publishing)","k":"Ab"},{"t":"All Glory Be To Christ","a":"Dustin Kensrue","n":"7008232","c":"© 2012 We Are Younger We Are Faster Music (Admin. by Music Services, Inc)","k":"E"},{"t":"Reign In Us","a":"Ben Glover; Jon Neufeld; Tim Neufeld","n":"5207587","c":"© 2008 Birdwing Music, Fieldstar Music (Admin. by Capitol CMG Publishing); Screaming Norman Music (Admin. by Word Entertainment, LLC)","k":"C"},{"t":"Never Once","a":"Matt Redman; Tim Wanstall; Jason Ingram","n":"5997055","c":"© 2011 Thankyou Music, Said And Done Music, sixsteps Music, worshiptogether.com songs et al. (Admin. by Capitol CMG Publishing, Essential Music Publis","k":"B"},{"t":"Joy To The World","a":"Chris Tomlin; Ed Cash; Matt Gilder; George Frideric Handel (music, arr. from Antioch); Isaac Watts (words)","n":"5607039","k":"D"},{"t":"For All That You Have Done","a":"Chris Llewellyn; Gareth Gilkeson","n":"7033047","c":"© 2014 Thankyou Music (Admin. by Capitol CMG Publishing)","k":"D"},{"t":"Go Tell it on the Mountain","a":"John W. Work Jr. (words/arrangement of African-American spiritual; origin uncertain, some sources credit Frederick J. Work or John W. Work II)"},{"t":"Angels We Have Heard On High","a":"Traditional French carol (Les Anges dans nos campagnes), 18th c.; English translation James Chadwick (c.1862, some hymnals say \"Crown of Jesus\" 1862/1","k":"F"},{"t":"Great is the Lord","a":"Michael W. Smith, Deborah D. (Debbie) Smith","n":"1149","c":"© 1982 Meadowgreen Music Company (admin. by Capitol CMG Publishing)","k":"C"},{"t":"Holy And Anointed One","a":"John Barnett","n":"164361","k":"G"},{"t":"The Power of Your Name","a":"Lincoln Brewster, Mia Fieldes","n":"5200900","c":"© 2008 Integrity's Praise! Music and Hillsong Publishing, admin. in US/Canada by Integrity's Hosanna! Music","k":"A"},{"t":"Every Giant Will Fall","a":"Rend Collective (credited as writer on WorshipTogether and PraiseCharts)","n":"7047084","c":"© Thankyou Music (admin. by Capitol CMG Publishing); year not captured","b":"112","k":"Bb"},{"t":"My Victory","a":"Darren Mulligan, David Crowder, Ed Cash, Hank Bentley","n":"7054548","b":"74","k":"C"},{"t":"Lord I Give You My Heart","a":"Reuben Morgan","n":"1866132","c":"© 1995 Hillsong Publishing (Admin by Essential Music Publishing)","b":"70","k":"G"},{"t":"Heart of Worship","a":"Matt Redman","n":"2296522","c":"© 1999 Thankyou Music (Admin. by Capitol CMG Publishing) (year and administrator NOT confirmed on a page I fetched; WorshipTogether lists publisher as","b":"72","k":"D"},{"t":"Like an Avalanche","a":"Joel Houston; Dylan Thomas","n":"5806713","c":"© 2010 Hillsong Publishing (Admin EMI CMG)","k":"Db"},{"t":"Great In Power","a":"Russell Fragar","n":"2582339","c":"© 1998 Hillsong Music Publishing (Admin. by Capitol CMG Publishing)","k":"C"},{"t":"Let Your Kingdom Come","a":"Bob Kauflin","n":"4804046","c":"© 2006 Sovereign Grace Praise (Admin. by Integrity Music)","k":"G"}];
+function nrm(s){return String(s||'').toLowerCase().replace(/[\[(].*?[\])]/g,'').replace(/[^a-z0-9]/g,'')}
+function infoFor(t){var n=nrm(t); for(var i=0;i<INFO.length;i++) if(nrm(INFO[i].t)===n) return INFO[i]; return null}
+function firstLyric(text){
+  var out=text.split('\n');
+  for(var i=0;i<out.length;i++){ var l=out[i]; if(/^\s*[{#]/.test(l)||!l.trim()) continue;
+    var s=l.replace(/\[[^\]]*\]/g,'').trim(); if(s.length>8 && /[a-zA-Z]{3}/.test(s)) return s; }
+  return '';
+}
+function openInfo(){
+  var m=parse(src.value).meta, hit=infoFor(m.title);
+  var f=function(id,v){$(id).value=v||''};
+  f('siAuth',m.composer); f('siArr',m.arranger); f('siCopy',m.copyright); f('siNum',m.ccli); f('siBpm',m.tempo); f('siLic',LS.get('cs.license'));
+  var note='';
+  if(hit){
+    if(!m.composer&&hit.a) f('siAuth',hit.a); if(!m.copyright&&hit.c) f('siCopy',hit.c);
+    if(!m.ccli&&hit.n) f('siNum',hit.n); if(!m.tempo&&hit.b) f('siBpm',hit.b);
+    note='Found in the built-in list. Check the first line below matches your song, then Apply.';
+  } else note='Not in the built-in list. Use the links to look it up, or type it in.';
+  $('siFound').textContent=note;
+  var q=encodeURIComponent((m.title||'')+' '+firstLyric(src.value)+' lyrics songwriter');
+  $('siLinkC').href='https://songselect.ccli.com/search/results?search='+encodeURIComponent(m.title||'');
+  $('siLinkP').href='https://www.praisecharts.com/search?q='+encodeURIComponent(m.title||'');
+  $('siLinkL').href='https://www.google.com/search?q='+q;
+  $('songinfo').showModal();
+}
+function applyInfo(){
+  var lic=$('siLic').value.replace(/\D/g,''); LS.set('cs.license',lic);
+  var vals={composer:$('siAuth').value.trim(),arranger:$('siArr').value.trim(),copyright:$('siCopy').value.trim(),ccli:$('siNum').value.replace(/\D/g,''),tempo:$('siBpm').value.replace(/\D/g,'')};
+  var lines=src.value.split('\n').filter(function(l){return !/^\s*\{\s*(composer|lyricist|copyright|tempo)\s*:|^\s*\{\s*meta\s*:\s*(ccli|arranger)\b/i.test(l)});
+  var at=-1; lines.forEach(function(l,i){ if(/^\s*\{\s*(title|key)\s*:/i.test(l)) at=i; });
+  var add=[];
+  if(vals.composer) add.push('{composer: '+vals.composer+'}');
+  if(vals.arranger) add.push('{meta: arranger '+vals.arranger+'}');
+  if(vals.tempo) add.push('{tempo: '+vals.tempo+'}');
+  if(vals.copyright) add.push('{copyright: '+vals.copyright+'}');
+  if(vals.ccli) add.push('{meta: ccli '+vals.ccli+'}');
+  lines.splice.apply(lines,[at+1,0].concat(add));
+  src.value=lines.join('\n'); cur.text=src.value; cur.steps=steps; render(); saveAll();
+  $('songinfo').close();
+}
+$('infoBtn').onclick=openInfo; $('siApply').onclick=applyInfo; $('siClose').onclick=function(){$('songinfo').close()};
 $('songSel').onchange=function(){ var v=this.value; if(v.indexOf('lib:')===0) openFromLibrary(+v.slice(4)); else select(v); };
 $('newBtn').onclick=function(){
   var s={id:uid(), text:'{title: New Song}\n{key: }\n\n', steps:0};
@@ -759,7 +818,7 @@ function pdfHeader(song,fs){
   if(m.capo) bits.push('Capo '+m.capo);
   if(m.tempo) bits.push('Tempo '+m.tempo);
   if(m.time) bits.push('Time '+m.time);
-  if(m.composer){ head.push({t:'Words and music: '+m.composer,size:fs*0.72,font:'F3',color:BLACK,y:hh+fs*0.72}); hh+=fs*1.0; }
+  if(m.composer){ head.push({t:'Words and music: '+m.composer+(m.arranger?'; arr. '+m.arranger:''),size:fs*0.72,font:'F3',color:BLACK,y:hh+fs*0.72}); hh+=fs*1.0; }
   if(bits.length){ head.push({t:bits.join('    '),size:fs*0.8,font:'F3',color:BLACK,y:hh+fs*0.8}); hh+=fs*1.1; }
   return {head:head,hh:hh+fs*0.5};
 }
