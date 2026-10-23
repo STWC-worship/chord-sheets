@@ -39,6 +39,13 @@ header.bar{position:relative;z-index:30}
 .menuwrap{position:relative;display:inline-block}
 #exportMenu{position:absolute;top:calc(100% + 6px);left:0;min-width:250px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;z-index:50}
 #exportMenu[hidden]{display:none}
+#pvdlg{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text,inherit);padding:0;max-width:min(96vw,640px);width:100%}
+#pvdlg::backdrop{background:rgba(0,0,0,.5)}
+#pvbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+#pvbar .grow{flex:1;color:var(--muted);font-size:.9em;min-width:140px}
+#pvpages{padding:12px;display:flex;flex-direction:column;gap:12px;align-items:center;background:#8a8f98}
+#pvpages canvas{width:100%;max-width:560px;height:auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+
 #exportMenu button{display:flex;flex-direction:column;align-items:flex-start;width:100%;background:none;border:0;border-radius:8px;padding:9px 12px;text-align:left;min-height:0}
 #exportMenu button:hover,#exportMenu button:focus{background:var(--btn)}
 #exportMenu small{color:var(--muted);font-size:.8em;margin-top:1px}
@@ -165,6 +172,7 @@ dialog#legend li{margin:5px 0}
     <span class="menuwrap">
       <button id="exportBtn" class="primary" aria-haspopup="true" aria-expanded="false">Export ▾</button>
       <div id="exportMenu" role="menu" hidden>
+        <button data-act="previewBtn" role="menuitem"><b>Preview</b><small>see how it will print</small></button>
         <button data-act="pdfBtn" role="menuitem"><b>PDF (color)</b><small>chords and headings in color</small></button>
         <button data-act="pdfBwBtn" role="menuitem"><b>PDF (black and white)</b><small>for plain printers</small></button>
         <button data-act="jpgBtn" role="menuitem"><b>Picture (JPG)</b><small>for upload forms</small></button>
@@ -176,7 +184,7 @@ dialog#legend li{margin:5px 0}
       </div>
     </span>
     <span hidden>
-      <button id="pdfBtn" type="button">Save PDF</button><button id="pdfBwBtn" type="button">PDF b/w</button><button id="printBtn" type="button">Print</button>
+      <button id="previewBtn" type="button">Preview</button><button id="pdfBtn" type="button">Save PDF</button><button id="pdfBwBtn" type="button">PDF b/w</button><button id="printBtn" type="button">Print</button>
       <button id="jpgBtn" type="button">JPG</button><button id="pngBtn" type="button">PNG</button>
       <button id="shareBtn" type="button">Share</button><button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
     </span>
@@ -220,6 +228,15 @@ dialog#legend li{margin:5px 0}
   <section id="sheetPane"><article id="sheet"></article></section>
 </main>
 
+<dialog id="pvdlg">
+  <div id="pvbar">
+    <b>Preview</b><span class="grow" id="pvinfo"></span>
+    <label><input type="checkbox" id="pvbw"> Black and white</label>
+    <button id="pvsave" class="primary">Save PDF</button>
+    <button id="pvclose">Close</button>
+  </div>
+  <div id="pvpages"></div>
+</dialog>
 <dialog id="songinfo">
   <div class="lg">
     <h2>Song info</h2>
@@ -1037,8 +1054,9 @@ function pdfPlan(song){
   return tiny||{fs:4,pageCols:[2,2]};
 }
 var NON_LATIN=/[^\u0000-ɏ‐-‧♭♯]/;
+var PDF_LAST=null;
 function buildPdf(bw){
-  PDF_BW=!!bw;
+  PDF_BW=!!bw; PDF_LAST=null;
   render();                                   // refresh CTX (key, transpose, display mode)
   if(NON_LATIN.test(fixLook(cur.text))) return imagePdf(sheetToCanvas());   // Chinese etc: the PDF fonts cannot draw it, use a picture page
   var song=parse(cur.text), plan=pdfPlan(song), L=pdfFlow(song,plan.fs,plan.pageCols);
@@ -1057,6 +1075,7 @@ function buildPdf(bw){
   var credit=creditLine(song.meta);
   if(credit && pageOps.length) pageOps[pageOps.length-1].push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 30 Td ('+pdfStr(credit)+') Tj ET');
   pageOps.forEach(function(ops){ ops.push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 20 Td ('+pdfStr("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.")+') Tj ET'); });
+  PDF_LAST={pages:pageOps,plan:plan};
   var objs=[], n=pageOps.length;
   objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
   var kids=[]; for(var i=0;i<n;i++) kids.push((6+i*2)+' 0 R');
@@ -1169,6 +1188,44 @@ function savePdf(bw){
   if(CAN_PICK_SAVE){ smartSave(blob,name+'.pdf','application/pdf','.pdf').then(function(done){ if(!done) dl(); }); return; }
   dl();
 }
+
+/* ---------- print preview ---------- */
+var CP1252={0x80:'€',0x85:'…',0x91:'‘',0x92:'’',0x93:'“',0x94:'”',0x95:'•',0x96:'–',0x97:'—'};
+function pdfUnstr(s){ return s.replace(/\\([()\\])/g,'$1').replace(/[\u0080-\u009f]/g,function(c){return CP1252[c.charCodeAt(0)]||c}); }
+function drawOps(ctx,ops,sc,PH){
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  ops.forEach(function(o){
+    var m=o.match(/^BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) ([\d.]+) rg ([\d.-]+) ([\d.-]+) Td \(([\s\S]*)\) Tj ET$/);
+    if(!m) return;
+    var size=parseFloat(m[2])*sc;
+    ctx.font=(m[1]==='F3'?'italic ':'')+'bold '+size.toFixed(2)+'px Helvetica, Arial, sans-serif';
+    ctx.fillStyle='rgb('+Math.round(m[3]*255)+','+Math.round(m[4]*255)+','+Math.round(m[5]*255)+')';
+    ctx.textBaseline='alphabetic';
+    ctx.fillText(pdfUnstr(m[8]),parseFloat(m[6])*sc,(PH-parseFloat(m[7]))*sc);
+  });
+}
+function openPreview(){
+  var box=$('pvpages'), bw=$('pvbw').checked;
+  try{ buildPdf(bw); }catch(e){ toast('Could not build the preview: '+e.message); return; }
+  box.innerHTML='';
+  if(!PDF_LAST){
+    var cv=sheetToCanvas(); var c=document.createElement('canvas'); c.width=cv.width; c.height=cv.height; c.getContext('2d').drawImage(cv,0,0); box.appendChild(c);
+    $('pvinfo').textContent='1 page (picture, for songs with Chinese or other special letters)';
+  } else {
+    var sc=1.4, pl=PDF_LAST.plan, sizes=Array.isArray(pl.fs)?pl.fs:[pl.fs];
+    PDF_LAST.pages.forEach(function(ops){
+      var c=document.createElement('canvas'); c.width=Math.round(612*sc); c.height=Math.round(792*sc);
+      drawOps(c.getContext('2d'),ops,sc,792); box.appendChild(c);
+    });
+    var uniq=sizes.slice(0,PDF_LAST.pages.length).filter(function(v,i,a){return a.indexOf(v)===i});
+    $('pvinfo').textContent=PDF_LAST.pages.length+(PDF_LAST.pages.length===1?' page':' pages')+' · text '+uniq.join(' / ')+' pt';
+  }
+  if(!$('pvdlg').open) $('pvdlg').showModal();
+}
+$('previewBtn').onclick=openPreview;
+$('pvbw').onchange=openPreview;
+$('pvclose').onclick=function(){ $('pvdlg').close(); };
+$('pvsave').onclick=function(){ var bw=$('pvbw').checked; $('pvdlg').close(); savePdf(bw); };
 $('pdfBtn').onclick=function(){ savePdf(false); };
 $('pdfBwBtn').onclick=function(){ savePdf(true); };
 
