@@ -431,7 +431,16 @@ function applyColors(){
 var ALIAS={sob:'start_of_bridge',eob:'end_of_bridge',t:'title',st:'subtitle',su:'subtitle',c:'comment',ci:'comment',cb:'comment',comment_italic:'comment',comment_box:'comment',
   soc:'start_of_chorus',eoc:'end_of_chorus',sov:'start_of_verse',eov:'end_of_verse',
   sob:'start_of_bridge',eob:'end_of_bridge',sot:'start_of_tab',eot:'end_of_tab'};
+/* Cyrillic/Greek letters that look like Latin ones (they sneak in from copied text) become plain letters */
+var LOOK={'а':'a','е':'e','о':'o','р':'p','с':'c','х':'x','у':'y','і':'i','ј':'j','ѕ':'s','ԁ':'d','һ':'h','А':'A','В':'B','Е':'E','К':'K','М':'M','Н':'H','О':'O','Р':'P','С':'C','Т':'T','Х':'X','І':'I'};
+function fixLook(s){
+  s=String(s);
+  var cyr=(s.match(/[Ѐ-ӿ]/g)||[]).length, lat=(s.match(/[A-Za-z]/g)||[]).length;
+  if(!cyr || cyr>lat*0.05) return s;                 // a real Russian or other Cyrillic song is left alone
+  return s.replace(/[аеорсхуіјѕԁһАВЕКМНОРСТХІ]/g,function(c){return LOOK[c]||c});
+}
 function parse(text){
+  text=fixLook(text);
   var meta={}, blocks=[], blk=null;
   function open(type,label,implicit){ blk={type:type,label:label||'',implicit:!!implicit,lines:[]}; blocks.push(blk); }
   var prevBlank=true;
@@ -445,6 +454,7 @@ function parse(text){
       if(/^start_of_(chorus|verse|bridge|tab)$/.test(n)){ open(n.slice(9),v,false); return; }
       if(/^end_of_/.test(n)){ blk=null; return; }
       if(n==='meta'){ var mm=v.match(/^(\S+)\s+(.*)$/); if(mm) meta[mm[1].toLowerCase()]=mm[2]; return; }
+      if(n==='key') v=v.replace(/^([A-G][#b]?)M$/,'$1');   // "BM" means B major
       meta[n]=v; return;
     }
     var hd=headingOf(raw, wasBlank);
@@ -807,7 +817,7 @@ function pdfRgb(hex){
    2. Only a section taller than a whole column may be split, and only between its paragraphs.
    3. If the next section will not fit under the last one, the page goes to two columns so it stays on the page.
    4. Never more than two pages. Lyric lines are not wrapped unless the text would get too small. */
-var PDF_PW=612, PDF_PH=792, PDF_MG=40, PDF_GUT=26, PDF_BW=false;
+var PDF_PW=612, PDF_PH=792, PDF_MG=36, PDF_GUT=14, PDF_BW=false;
 function pdfHeader(song,fs){
   var m=song.meta, head=[], hh=0, BLACK='0 0 0';
   var tSize=fs*1.45; head.push({t:m.title||'Untitled',size:tSize,font:'F2',color:BLACK,y:hh+tSize}); hh+=tSize*1.25;
@@ -951,9 +961,9 @@ function pdfFlow(song,fsSpec,pageCols){
 }
 function pdfPlan(song){
   // from JT's own Word sheets: short songs 16-18 pt, longer ones 12-14 pt, kept on one page whenever it reads
-  var MAXFS=22, MINFS=11, fs;
+  var MAXFS=22, MINFS=13, fs;                                          // one page only if it reads at 13 pt or more
   function maxFs(pc,allowWrap,floor){
-    for(fs=MAXFS; fs>=floor; fs-=0.5){
+    for(fs=MAXFS; fs>=floor; fs-=0.25){
       var f=pdfFlow(song,fs,pc);
       if(f.n<=pc.length && !f.overflow && (allowWrap || !f.wraps)) return fs;
     }
@@ -973,9 +983,10 @@ function pdfPlan(song){
   function bestPerPage(pc,minF1,minF2,maxF1){
     var best=null;
     function tryIt(f1,f2){
+      if(Math.abs(f1-f2)>2) return;                               // one size for the whole sheet; a small difference only if it fits better
       var fl=pdfFlow(song,[f1,f2],pc);
       if(fl.n<=pc.length && !fl.overflow && !fl.wraps){
-        var a=avgFs(fl,[f1,f2]);
+        var a=avgFs(fl,[f1,f2])-0.15*Math.abs(f1-f2);
         if(!best || a>best.avg) best={fs:[f1,f2],pageCols:pc,avg:a};
       }
     }
@@ -983,7 +994,7 @@ function pdfPlan(song){
     for(f1=maxF1; f1>=minF1; f1-=1) for(f2=MAXFS; f2>=minF2; f2-=1) tryIt(f1,f2);
     if(best){                                                       // refine around the winner
       var c=best.fs;
-      for(f1=c[0]+1; f1>=c[0]-1; f1-=0.5) for(f2=c[1]+1; f2>=c[1]-1; f2-=0.5){
+      for(f1=c[0]+1; f1>=c[0]-1; f1-=0.25) for(f2=c[1]+1; f2>=c[1]-1; f2-=0.25){
         if(f1>=minF1 && f2>=minF2 && f1<=maxF1 && f2<=MAXFS) tryIt(f1,f2);
       }
     }
@@ -999,14 +1010,22 @@ function pdfPlan(song){
 
   // two pages: whichever layout gives the biggest average type, keeping every section whole
   var A=bestPerPage([1,1],10,10,MAXFS);                             // one column on both pages
-  var B=bestPerPage([2,1],9.5,10,16);                               // page 1 in two columns
+  var B=bestPerPage([2,1],10,10,16);                               // page 1 in two columns
   var pick=null;
   if(A) pick={fs:A.fs,pageCols:A.pageCols,score:A.avg};
   if(B && (!pick || B.avg*0.95>pick.score)) pick={fs:B.fs,pageCols:B.pageCols,score:B.avg*0.95};
+  if(!pick || pick.score<10.5){                                      // small result: let lines wrap if that makes the type clearly bigger
+    var wr=null;
+    [[2,2],[1,2],[2,1],[1,1]].forEach(function(pc){
+      var f=maxFs(pc,true,10);
+      if(f!==null && (!wr || f>wr.fs)) wr={fs:f,pageCols:pc};
+    });
+    if(wr && (!pick || wr.fs>pick.score*1.1)) pick={fs:wr.fs,pageCols:wr.pageCols,score:wr.fs};
+  }
   if(pick) return pick;
-  var any=null;                                                     // allow wrapped lines, down to 9 pt
+  var any=null;                                                     // allow wrapped lines, down to 10 pt
   [[1,1],[2,1],[1,2],[2,2]].forEach(function(pc){
-    var f=maxFs(pc,true,9);
+    var f=maxFs(pc,true,10);
     if(f!==null && (!any || f>any.fs)) any={fs:f,pageCols:pc};
   });
   if(any) return any;
@@ -1021,7 +1040,7 @@ var NON_LATIN=/[^\u0000-ɏ‐-‧♭♯]/;
 function buildPdf(bw){
   PDF_BW=!!bw;
   render();                                   // refresh CTX (key, transpose, display mode)
-  if(NON_LATIN.test(cur.text)) return imagePdf(sheetToCanvas());   // Chinese etc: the PDF fonts cannot draw it, use a picture page
+  if(NON_LATIN.test(fixLook(cur.text))) return imagePdf(sheetToCanvas());   // Chinese etc: the PDF fonts cannot draw it, use a picture page
   var song=parse(cur.text), plan=pdfPlan(song), L=pdfFlow(song,plan.fs,plan.pageCols);
   var PW=612, PH=792;
   var pageOps=L.pages.map(function(items,pi){
