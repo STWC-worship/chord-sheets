@@ -25,8 +25,9 @@
   color-scheme:light;
   --bg:#f5f1e4; --panel:#fffdf5; --ink:#14261b; --muted:#53655a; --line:rgba(20,38,27,.22);
   --accent:#1f5a43; --accent-ink:#ffffff; --chord:#9b2c1d; --btn:#e3ebde; --btn-ink:#14261b;
-  --edit-bg:rgba(31,90,67,.1); --edit-bg-hover:rgba(31,90,67,.2);
+  --edit-bg:rgba(232,196,106,.38); --edit-bg-hover:rgba(232,196,106,.6); --edit-border:#b8902a; --edit-ink:#5a4208;
 }
+:root[data-theme="light"] button.primary,:root[data-theme="light"] .tabs button.on{background:#e8c46a;color:#10190f;border-color:#b8902a}
 
 .brandrow{display:flex;align-items:center;gap:10px}
 .brandrow img{border-radius:8px;display:block}
@@ -70,10 +71,10 @@ header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:8
 .keybox output{min-width:3.2em;text-align:center;font-weight:700}
 .actions .push{margin-left:auto}
 /* buttons that change the song itself (key, song info, new/copy/remove, chord tools) get a gold outline so they stand apart from view controls */
-button.edit,.keybox button{background:var(--edit-bg);border-color:var(--accent);color:var(--accent)}
+button.edit,.keybox button{background:var(--edit-bg);border-color:var(--edit-border,var(--accent));color:var(--edit-ink,var(--accent))}
 button.edit:hover,.keybox button:hover{background:var(--edit-bg-hover)}
-.keybox output{color:var(--accent)}
-.grp.song .gl{color:var(--accent)}
+.keybox output{color:var(--edit-ink,var(--accent))}
+.grp.song .gl{color:var(--edit-ink,var(--accent))}
 .more{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:flex-start}
 .grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .gl{flex:0 0 100%;font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
