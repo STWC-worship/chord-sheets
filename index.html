@@ -9,16 +9,30 @@
 <link rel="apple-touch-icon" href="chords-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="STWC Chords">
+<meta name="color-scheme" content="dark light">
 <title>STWC Chord Sheet Pro</title>
+<script>try{var t=localStorage.getItem("cs.theme"); if(t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
 :root{
-  --bg:#f6f4ef; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#dcd8cf;
-  --accent:#1f5fbf; --chord:#b3261e; --btn:#ece9e1; --btn-ink:#1d1d1f;
+  /* same pine green, cream and gold as the rest of the site */
+  color-scheme:dark;
+  --bg:#0e2c20; --panel:#16402f; --ink:#eef0e4; --muted:#a9b8a6; --line:rgba(238,240,228,.2);
+  --accent:#e8c46a; --accent-ink:#10190f; --chord:#ffd98a; --btn:#1f5a43; --btn-ink:#eef0e4;
+  --edit-bg:rgba(232,196,106,.16); --edit-bg-hover:rgba(232,196,106,.3); --bar:#0a2118;
 }
-@media (prefers-color-scheme:dark){
-  :root{ --bg:#17171a; --panel:#1f1f23; --ink:#ececee; --muted:#9a9aa2; --line:#33333a;
-         --accent:#7aa7f0; --chord:#ff8a80; --btn:#2c2c33; --btn-ink:#ececee; }
+/* light mode: cream paper, pine-green accents, dark ink */
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f5f1e4; --panel:#fffdf5; --ink:#14261b; --muted:#53655a; --line:rgba(20,38,27,.22);
+  --accent:#1f5a43; --accent-ink:#ffffff; --chord:#9b2c1d; --btn:#e3ebde; --btn-ink:#14261b;
+  --edit-bg:rgba(31,90,67,.1); --edit-bg-hover:rgba(31,90,67,.2);
 }
+
+.brandrow{display:flex;align-items:center;gap:10px}
+.brandrow img{border-radius:8px;display:block}
+.brandrow span{display:flex;flex-direction:column;line-height:1.15}
+.brandrow b{font-size:1.05em}
+.brandrow small{color:var(--muted);font-size:.78em}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -28,14 +42,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
 button,select,input{font:inherit;color:var(--btn-ink)}
 button{background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}
 button:active{filter:brightness(.92)}
-button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
 header.bar{position:relative;z-index:30}
-.brandrow{display:flex;align-items:center;gap:10px}
-.brandrow img{border-radius:8px;display:block}
-.brandrow span{display:flex;flex-direction:column;line-height:1.15}
-.brandrow b{font-size:1.05em}
-.brandrow small{color:var(--muted);font-size:.78em}
 .menuwrap{position:relative;display:inline-block}
 #exportMenu{position:absolute;top:calc(100% + 6px);left:0;min-width:250px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;z-index:50}
 #exportMenu[hidden]{display:none}
@@ -61,8 +70,8 @@ header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:8
 .keybox output{min-width:3.2em;text-align:center;font-weight:700}
 .actions .push{margin-left:auto}
 /* buttons that change the song itself (key, song info, new/copy/remove, chord tools) get a gold outline so they stand apart from view controls */
-button.edit,.keybox button{background:rgba(232,196,106,.16);border-color:var(--accent);color:var(--accent)}
-button.edit:hover,.keybox button:hover{background:rgba(232,196,106,.3)}
+button.edit,.keybox button{background:var(--edit-bg);border-color:var(--accent);color:var(--accent)}
+button.edit:hover,.keybox button:hover{background:var(--edit-bg-hover)}
 .keybox output{color:var(--accent)}
 .grp.song .gl{color:var(--accent)}
 .more{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:flex-start}
@@ -90,11 +99,11 @@ main{flex:1;min-height:0;display:flex}
 .sec.chorus{border-left:3px solid var(--accent);padding-left:12px}
 .sec .lbl{font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--label,var(--accent));font-weight:700;margin-bottom:.25em}
 .ln{margin:0 0 .35em;line-height:1.25}
-.ln.plain{white-space:pre-wrap}
+.ln.plain{white-space:pre-wrap;font-weight:700}
 .w{display:inline-block;white-space:nowrap;vertical-align:bottom}
 .p{display:inline-flex;flex-direction:column;vertical-align:bottom}
 .ch{color:var(--chord);font-weight:700;font-size:.88em;line-height:1.15;padding-right:.4em;white-space:pre}
-.ly{white-space:pre;line-height:1.3}
+.ly{white-space:pre;line-height:1.3;font-weight:700}
 .note{margin:.2em 0 .5em;padding:.3em .6em;background:var(--btn);border-radius:6px;font-style:italic;font-size:.92em}
 pre.tab{font:.85em/1.3 ui-monospace,Menlo,Consolas,monospace;margin:0 0 .6em;overflow:auto}
 .nochords .ch{display:none}
@@ -132,7 +141,7 @@ dialog#legend li{margin:5px 0}
   button,select{min-height:38px;padding:6px 10px;font-size:15px}
   header.bar{gap:6px}
   .tabs button{flex:1}
-  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
   main{display:block}
   #editorPane,#sheetPane{height:100%;border:0}
   body[data-view="edit"] #sheetPane{display:none}
@@ -167,7 +176,7 @@ dialog#legend li{margin:5px 0}
 <body data-view="edit">
 
 <header class="bar">
-  <div class="brandrow"><img src="chords-icon-192.png" width="34" height="34" alt=""><span><b>Chord Sheet Pro</b><small>Spirit and Truth Worship Consulting</small></span></div>
+  <div class="brandrow"><img src="chords-icon-192.png" width="34" height="34" alt=""><span><b>STWC Chord Sheet Pro</b><small>Spirit and Truth Worship Consulting</small></span></div>
   <div class="row">
     <input id="songSearch" class="grow" type="search" placeholder="Search songs" aria-label="Search songs" autocomplete="off" autocapitalize="off">
     <select id="songSel" class="grow" aria-label="Song"></select>
@@ -188,6 +197,7 @@ dialog#legend li{margin:5px 0}
   <div class="row actions">
     <button id="smaller" aria-label="Smaller text">A−</button>
     <button id="bigger" aria-label="Bigger text">A+</button>
+    <button id="themeBtn" aria-label="Switch between dark and light mode" title="Switch between dark and light mode">☀ Light</button>
     <button id="moreBtn" class="onlyphone">More ▾</button>
     <button id="impBtn" class="push">Import</button>
     <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
@@ -478,6 +488,12 @@ function fixLook(s){
 }
 /* Chinese songs from Word often carry spacing and a crowded title line. Tidy them so they read like the English songs. */
 var CJK_ANY=/[㐀-鿿＀-￯、-〿]/;
+function cjkSpace(all,left,run){
+  if(left===']') return left;                         // nothing between a chord and the text
+  if(run.indexOf('\u3000')>=0) return left+' ';        // a wide space was a phrase pause: keep one space
+  if(run.length===1) return left+run;                  // a single space is a normal gap
+  return left;                                         // several spaces were Word alignment padding
+}
 function tidyCJK(text){
   if(!CJK_ANY.test(text)) return text;
   var out=[], hasKey=/^\s*\{\s*key\s*:/im.test(text), hasTempo=/^\s*\{\s*tempo\s*:/im.test(text), hasTime=/^\s*\{\s*time\s*:/im.test(text), hasComp=/^\s*\{\s*composer\s*:/im.test(text), titleDone=false;
@@ -486,8 +502,9 @@ function tidyCJK(text){
     if(m){
       titleDone=true;
       var t=m[1], extra=[], x;
+      if(!(CJK_ANY.test(t)||/Tempo\s*=|Major|Minor/i.test(t))){ out.push(line); return; }
       if((x=t.match(/\bTempo\s*=\s*(\d{2,3})/i))){ if(!hasTempo) extra.push('{tempo: '+x[1]+'}'); t=t.replace(x[0],''); }
-      if((x=t.match(/\b(\d{1,2}\/\d{1,2})\b/))){ if(!hasTime) extra.push('{time: '+x[1]+'}'); t=t.replace(x[0],''); }
+      if((x=t.match(/(?:^|[^\d\/])(\d{1,2}\/(?:2|4|8|16))(?![\d\/])/))){ if(!hasTime) extra.push('{time: '+x[1]+'}'); t=t.replace(x[1],''); }
       if((x=t.match(/\b([A-G][#b]?)\s*(Major|Minor)\b/i))){ if(!hasKey) extra.unshift('{key: '+x[1]+(/minor/i.test(x[2])?'m':'')+'}'); t=t.replace(x[0],''); }
       if((x=t.match(/(詞、曲|詞曲|词曲|詞|词|曲)\s*[：:]\s*(.+)$/))){ if(!hasComp) extra.push('{composer: '+x[2].replace(/\s+/g,' ').trim()+'}'); t=t.slice(0,x.index); }
       t=t.replace(/[,，、\s]+$/,'').replace(/\s{2,}/g,' ').trim();
@@ -501,7 +518,7 @@ function tidyCJK(text){
       return;
     }
     if(CJK_ANY.test(line) && !/^\s*\{/.test(line)){
-      line=line.replace(/　/g,' ').replace(/([㐀-鿿＀-￯、-〿\]])[ \t]+(?=[㐀-鿿＀-￯、-〿\[])/g,'$1');
+      line=line.replace(/([\u3400-\u9fff\uff00-\uffef\u3001-\u303f\]])([ \t\u3000]+)(?=[\u3400-\u9fff\uff00-\uffef\u3001-\u303f\[])/g,cjkSpace).replace(/\u3000/g,' ');
     }
     out.push(line);
   });
@@ -1285,6 +1302,13 @@ function openPreview(){
   }
   if(!$('pvdlg').open) $('pvdlg').showModal();
 }
+function curTheme(){ var t=document.documentElement.getAttribute('data-theme'); return t||'dark'; }
+function showTheme(){ var light=curTheme()==='light'; $('themeBtn').textContent=light?'☾ Dark':'☀ Light'; }
+$('themeBtn').onclick=function(){
+  var next=curTheme()==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',next); LS.set('cs.theme',next); showTheme();
+};
+showTheme();
 $('previewBtn').onclick=openPreview;
 $('pvbw').onchange=openPreview;
 $('pvclose').onclick=function(){ $('pvdlg').close(); };
