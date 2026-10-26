@@ -47,7 +47,7 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
 header.bar{position:relative;z-index:30}
 .menuwrap{position:relative;display:inline-block}
-#exportMenu{position:absolute;top:calc(100% + 6px);left:0;min-width:250px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;z-index:50}
+#exportMenu{position:fixed;top:60px;left:10px;min-width:250px;max-width:calc(100vw - 20px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;z-index:50}
 #exportMenu[hidden]{display:none}
 #pvdlg{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text,inherit);padding:0;max-width:min(96vw,640px);width:100%}
 #pvdlg::backdrop{background:rgba(0,0,0,.5)}
@@ -138,6 +138,9 @@ dialog#legend li{margin:5px 0}
   header.bar.open .more{display:flex}
   .grp{width:100%}
   .keyrow select{flex:1 1 90px;min-width:0}
+  .actions{gap:5px}
+  .actions button{padding:6px 9px}
+  .actions .wide{display:none}
   .row .grow{flex:1 1 110px}
   button,select{min-height:38px;padding:6px 10px;font-size:15px}
   header.bar{gap:6px}
@@ -198,7 +201,7 @@ dialog#legend li{margin:5px 0}
   <div class="row actions">
     <button id="smaller" aria-label="Smaller text">A−</button>
     <button id="bigger" aria-label="Bigger text">A+</button>
-    <button id="themeBtn" aria-label="Switch between dark and light mode" title="Switch between dark and light mode">☀ Light</button>
+    <button id="themeBtn" aria-label="Switch between dark and light mode" title="Switch between dark and light mode"><span aria-hidden="true">☀</span><span class="wide"> Light</span></button>
     <button id="moreBtn" class="onlyphone">More ▾</button>
     <button id="impBtn" class="push">Import</button>
     <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
@@ -1304,7 +1307,7 @@ function openPreview(){
   if(!$('pvdlg').open) $('pvdlg').showModal();
 }
 function curTheme(){ var t=document.documentElement.getAttribute('data-theme'); return t||'dark'; }
-function showTheme(){ var light=curTheme()==='light'; $('themeBtn').textContent=light?'☾ Dark':'☀ Light'; }
+function showTheme(){ var light=curTheme()==='light'; $('themeBtn').innerHTML=light?'<span aria-hidden="true">☾</span><span class="wide"> Dark</span>':'<span aria-hidden="true">☀</span><span class="wide"> Light</span>'; }
 $('themeBtn').onclick=function(){
   var next=curTheme()==='light'?'dark':'light';
   document.documentElement.setAttribute('data-theme',next); LS.set('cs.theme',next); showTheme();
@@ -1951,6 +1954,12 @@ $('exportBtn').onclick=function(e){
   e.stopPropagation();
   var m=$('exportMenu'), open=m.hidden;
   m.hidden=!open; this.setAttribute('aria-expanded',open?'true':'false');
+  if(open){                                           // place the menu under the button, never past the screen edge
+    var br=this.getBoundingClientRect(), w=m.offsetWidth;
+    m.style.left=Math.max(10,Math.min(br.right-w,innerWidth-w-10))+'px';
+    m.style.top=(br.bottom+6)+'px';
+    m.style.maxHeight=Math.max(160,innerHeight-br.bottom-16)+'px';
+  }
 };
 $('exportMenu').addEventListener('click',function(e){
   var b=e.target.closest('button[data-act]'); if(!b) return;
