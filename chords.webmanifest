@@ -1,6 +1,6 @@
 {
- "name": "Chord Sheet Pro",
- "short_name": "Chord Sheets",
+ "name": "STWC Chord Sheet Pro",
+ "short_name": "STWC Chords",
  "description": "Make chord sheets from ChordPro, Word, PDF or text. Any key, one page, bold and clear.",
  "start_url": "./",
  "scope": ".",

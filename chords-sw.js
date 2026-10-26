@@ -1,15 +1,15 @@
-/* Offline support for the Chord Sheet Maker page (chords.html).
+/* Offline support for the STWC Chord Sheet Pro page (chords.html).
    Only that one page is handled; every other request goes straight to the network,
    so this is safe to host at the root of the STWC site.
    The page registers this file as chords-sw.js?p=<its own path>. */
-var CACHE = 'chord-sheet-maker-v1';
+var CACHE = 'chord-sheet-maker-v3'; // v3: STWC Chord Sheet Pro name, new menu
 var KEY = 'chord-sheet-page';
 var PAGE = decodeURIComponent((new URL(self.location.href)).searchParams.get('p') || '/');
 
 function norm(p){ return p.replace(/index\.html$/,'').replace(/\.html$/,'').replace(/\/+$/,'') || '/'; }
 var PAGE_N = norm(PAGE);
 
-function isOurPage(res, text){ return res && res.ok && /<title>Chord Sheet Maker<\/title>/.test(text); }
+function isOurPage(res, text){ return res && res.ok && /<title>(STWC )?Chord Sheet (Maker|Pro)<\/title>/.test(text); }
 
 // Redirected responses can't be used to answer a navigation, so rebuild a clean one.
 function clean(res, body){

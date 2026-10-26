@@ -8,8 +8,8 @@
 <link rel="icon" type="image/png" href="chords-icon-192.png">
 <link rel="apple-touch-icon" href="chords-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Chord Sheets">
-<title>Chord Sheet Maker</title>
+<meta name="apple-mobile-web-app-title" content="STWC Chords">
+<title>STWC Chord Sheet Pro</title>
 <style>
 :root{
   --bg:#f6f4ef; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#dcd8cf;
@@ -59,6 +59,15 @@ header.bar{background:var(--panel);border-bottom:1px solid var(--line);padding:8
 .row .grow{flex:1 1 160px;min-width:0}
 .keybox{display:inline-flex;align-items:center;gap:4px}
 .keybox output{min-width:3.2em;text-align:center;font-weight:700}
+.actions .push{margin-left:auto}
+/* buttons that change the song itself (key, song info, new/copy/remove, chord tools) get a gold outline so they stand apart from view controls */
+button.edit,.keybox button{background:rgba(232,196,106,.16);border-color:var(--accent);color:var(--accent)}
+button.edit:hover,.keybox button:hover{background:rgba(232,196,106,.3)}
+.keybox output{color:var(--accent)}
+.grp.song .gl{color:var(--accent)}
+.more{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:flex-start}
+.grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.gl{flex:0 0 100%;font-size:.72em;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
 .tabs,.onlyphone{display:none}
 
@@ -115,8 +124,11 @@ dialog#legend li{margin:5px 0}
 @media (max-width:800px){
   .tabs{display:flex;gap:6px}
   .onlyphone{display:inline-block}
-  .more{display:none}
+  .more{display:none;flex-direction:column;gap:10px;padding-top:6px;border-top:1px solid var(--line)}
   header.bar.open .more{display:flex}
+  .grp{width:100%}
+  .keyrow select{flex:1 1 90px;min-width:0}
+  .row .grow{flex:1 1 110px}
   button,select{min-height:38px;padding:6px 10px;font-size:15px}
   header.bar{gap:6px}
   .tabs button{flex:1}
@@ -159,24 +171,34 @@ dialog#legend li{margin:5px 0}
   <div class="row">
     <input id="songSearch" class="grow" type="search" placeholder="Search songs" aria-label="Search songs" autocomplete="off" autocapitalize="off">
     <select id="songSel" class="grow" aria-label="Song"></select>
-    <button id="moreBtn" class="onlyphone">More ▾</button>
   </div>
-  <div class="row">
+  <div class="row keyrow">
     <span class="keybox">
       <button id="down" aria-label="Transpose down">♭ −</button>
       <output id="keyOut">Key</output>
       <button id="up" aria-label="Transpose up">+ ♯</button>
     </span>
+    <select id="showSel" aria-label="Show chords as">
+      <option value="asis">As typed</option><option value="letters">Letters</option><option value="numbers">Nashville numbers</option>
+    </select>
+    <select id="accSel" aria-label="Sharps or flats">
+      <option value="auto">Auto ♯/♭</option><option value="sharp">Sharps ♯</option><option value="flat">Flats ♭</option>
+    </select>
+  </div>
+  <div class="row actions">
     <button id="smaller" aria-label="Smaller text">A−</button>
     <button id="bigger" aria-label="Bigger text">A+</button>
+    <button id="moreBtn" class="onlyphone">More ▾</button>
+    <button id="impBtn" class="push">Import</button>
+    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
     <span class="menuwrap">
       <button id="exportBtn" class="primary" aria-haspopup="true" aria-expanded="false">Export ▾</button>
       <div id="exportMenu" role="menu" hidden>
         <button data-act="previewBtn" role="menuitem"><b>Preview</b><small>see how it will print</small></button>
         <button data-act="pdfBtn" role="menuitem"><b>PDF (color)</b><small>chords and headings in color</small></button>
         <button data-act="pdfBwBtn" role="menuitem"><b>PDF (black and white)</b><small>for plain printers</small></button>
-        <button data-act="jpgBtn" role="menuitem"><b>Picture (JPG)</b><small>for upload forms</small></button>
-        <button data-act="pngBtn" role="menuitem"><b>Picture (PNG)</b><small>sharper text</small></button>
+        <button data-act="jpgBtn" role="menuitem"><b>Pictures (JPG)</b><small>one picture per page</small></button>
+        <button data-act="pngBtn" role="menuitem"><b>Pictures (PNG)</b><small>one per page, sharper text</small></button>
         <button data-act="expBtn" role="menuitem"><b>ChordPro file (.cho)</b><small>for keeping and sharing</small></button>
         <button data-act="bothBtn" role="menuitem"><b>.cho + PDF together</b><small>one tap, both files</small></button>
         <button data-act="printBtn" role="menuitem"><b>Print…</b><small>your printer or Save as PDF</small></button>
@@ -189,26 +211,24 @@ dialog#legend li{margin:5px 0}
       <button id="shareBtn" type="button">Share</button><button id="expBtn" type="button">Export .cho</button><button id="bothBtn" type="button">Both</button>
     </span>
   </div>
-  <div class="row more" id="more">
-    <button id="infoBtn" title="Authors, CCLI, copyright, tempo, arranger">Song info</button>
-    <button id="newBtn">New</button>
-    <button id="dupBtn">Copy</button>
-    <button id="delBtn">Remove</button>
-    <select id="showSel" aria-label="Show chords as">
-      <option value="asis">Chords as written</option><option value="letters">Show as letters</option><option value="numbers">Show as Nashville numbers</option>
-    </select>
-    <select id="accSel" aria-label="Sharps or flats">
-      <option value="auto">Auto ♯/♭</option><option value="sharp">Use ♯</option><option value="flat">Use ♭</option>
-    </select>
-    <label class="chk"><input type="checkbox" id="twoCol"> 2 columns</label>
-    <label class="chk"><input type="checkbox" id="showCh" checked> Chords</label>
-    <button id="libBtn" title="Search a whole folder of songs without importing them. Option-click to choose a different folder.">Open library folder</button>
-    <input type="file" id="libInput" webkitdirectory directory multiple hidden>
-    <label class="chk" title="Colour of the chords">Chords <input type="color" id="chordColor" value="#b3261e" aria-label="Chord colour"></label>
-    <label class="chk" title="Colour of Verse / Chorus headings">Headings <input type="color" id="labelColor" value="#1f5fbf" aria-label="Heading colour"></label>
-    <button id="colorReset" title="Back to the default colours">Reset colours</button>
-    <button id="impBtn">Import</button>
-    <input type="file" id="impFile" accept=".cho,.chopro,.crd,.txt,.pro,.docx,.pdf,.rtf,text/plain" multiple hidden>
+  <div class="more" id="more">
+    <div class="grp song"><span class="gl">Edit song</span>
+      <button class="edit" id="infoBtn" title="Authors, CCLI, copyright, tempo, arranger">Song info</button>
+      <button class="edit" id="newBtn">New</button>
+      <button class="edit" id="dupBtn">Copy</button>
+      <button class="edit" id="delBtn">Remove</button>
+    </div>
+    <div class="grp"><span class="gl">Library</span>
+      <button id="libBtn" title="Search a whole folder of songs without importing them. Option-click to choose a different folder.">Open library folder</button>
+      <input type="file" id="libInput" webkitdirectory directory multiple hidden>
+    </div>
+    <div class="grp"><span class="gl">View</span>
+      <label class="chk"><input type="checkbox" id="showCh" checked> Chords</label>
+      <label class="chk"><input type="checkbox" id="twoCol"> 2 columns</label>
+      <label class="chk" title="Colour of the chords">Chord colour <input type="color" id="chordColor" value="#b3261e" aria-label="Chord colour"></label>
+      <label class="chk" title="Colour of Verse / Chorus headings">Heading colour <input type="color" id="labelColor" value="#1f5fbf" aria-label="Heading colour"></label>
+      <button id="colorReset" title="Back to the default colours">Reset colours</button>
+    </div>
   </div>
   <div class="tabs">
     <button id="tabEdit" class="on">Edit</button>
@@ -219,8 +239,8 @@ dialog#legend li{margin:5px 0}
 <main>
   <section id="editorPane">
     <div id="editorTools">
-      <button id="brk">[ ] chord</button>
-      <button id="conv" title="Turn pasted chords-over-lyrics (Ultimate Guitar style) into ChordPro">Convert pasted chords-over-lyrics</button>
+      <button class="edit" id="brk">[ ] chord</button>
+      <button class="edit" id="conv" title="Turn pasted chords-over-lyrics (Ultimate Guitar style) into ChordPro">Convert pasted chords-over-lyrics</button>
       <button id="help">Legend (how to type)</button>
     </div>
     <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
@@ -257,7 +277,7 @@ dialog#legend li{margin:5px 0}
     <p class="lead">You only need to know a few things. Everything else is optional.</p>
     <div class="notice" id="legalNotice">
       <h3>Important notice: copyrighted music</h3>
-      <p><b>No license is granted.</b> Chord Sheet Pro is a tool for arranging, converting and formatting chord sheets. It does not give you, and nothing in it grants, any license, right or permission to copy, display, project, perform, print, record, stream, teach from or distribute any song, lyric, melody, chord chart or other copyrighted work.</p>
+      <p><b>No license is granted.</b> STWC Chord Sheet Pro is a tool for arranging, converting and formatting chord sheets. It does not give you, and nothing in it grants, any license, right or permission to copy, display, project, perform, print, record, stream, teach from or distribute any song, lyric, melody, chord chart or other copyrighted work.</p>
       <p><b>You are responsible for permission.</b> Songs, lyrics, melodies and arrangements belong to their authors, composers, publishers and other rights holders. Anyone who uses chord sheets or lyrics created, imported, converted, stored or exported with this app in any public or shared setting, including church services and congregational worship, rehearsals shared with others, lessons and teaching, classes, broadcasts, livestreams, recordings, and any printed or digital distribution, must first obtain the license or licenses that apply (for example a CCLI Church Copyright License, a CCLI Streaming or Rehearsal license, or another license) or the direct written permission of the copyright holder, and must follow the terms of that license, including any reporting. A church license generally covers congregational singing at that church and does not by itself cover private lessons, studio teaching, choir or ensemble copying, or distribution to others.</p>
       <p><b>No warranty.</b> Chords, keys, tempos, authorship, copyright and CCLI information in this app may be incomplete or wrong and are provided for convenience only. Verify them with the publisher or CCLI SongSelect. This app and its makers, including Spirit and Truth Worship Consulting, make no representations or warranties of any kind, and are not liable for any claim, loss or damage arising from the use of this app, its output, or any song material, including any claim of copyright infringement by a user. By using this app you accept these terms and agree to use it only with material you have the right to use.</p>
       <p class="fine">This notice is a general statement and is not legal advice.</p>
@@ -456,8 +476,39 @@ function fixLook(s){
   if(!cyr || cyr>lat*0.05) return s;                 // a real Russian or other Cyrillic song is left alone
   return s.replace(/[аеорсхуіјѕԁһАВЕКМНОРСТХІ]/g,function(c){return LOOK[c]||c});
 }
+/* Chinese songs from Word often carry spacing and a crowded title line. Tidy them so they read like the English songs. */
+var CJK_ANY=/[㐀-鿿＀-￯、-〿]/;
+function tidyCJK(text){
+  if(!CJK_ANY.test(text)) return text;
+  var out=[], hasKey=/^\s*\{\s*key\s*:/im.test(text), hasTempo=/^\s*\{\s*tempo\s*:/im.test(text), hasTime=/^\s*\{\s*time\s*:/im.test(text), hasComp=/^\s*\{\s*composer\s*:/im.test(text), titleDone=false;
+  text.split(/\r?\n/).forEach(function(line){
+    var m=!titleDone && line.match(/^\s*\{\s*title\s*:\s*(.*?)\s*\}\s*$/i);
+    if(m){
+      titleDone=true;
+      var t=m[1], extra=[], x;
+      if((x=t.match(/\bTempo\s*=\s*(\d{2,3})/i))){ if(!hasTempo) extra.push('{tempo: '+x[1]+'}'); t=t.replace(x[0],''); }
+      if((x=t.match(/\b(\d{1,2}\/\d{1,2})\b/))){ if(!hasTime) extra.push('{time: '+x[1]+'}'); t=t.replace(x[0],''); }
+      if((x=t.match(/\b([A-G][#b]?)\s*(Major|Minor)\b/i))){ if(!hasKey) extra.unshift('{key: '+x[1]+(/minor/i.test(x[2])?'m':'')+'}'); t=t.replace(x[0],''); }
+      if((x=t.match(/(詞、曲|詞曲|词曲|詞|词|曲)\s*[：:]\s*(.+)$/))){ if(!hasComp) extra.push('{composer: '+x[2].replace(/\s+/g,' ').trim()+'}'); t=t.slice(0,x.index); }
+      t=t.replace(/[,，、\s]+$/,'').replace(/\s{2,}/g,' ').trim();
+      out.push('{title: '+t+'}'); extra.forEach(function(e){ out.push(e); });
+      return;
+    }
+    var c=line.match(/^\s*\{\s*comment\s*:\s*(INTRO|OUTRO|INTERLUDE|TURNAROUND|TAG|ENDING)\s*:?\s*(.*?)\s*\}\s*$/i);
+    if(c){
+      out.push('',c[1].charAt(0).toUpperCase()+c[1].slice(1).toLowerCase());
+      if(c[2]) out.push(c[2].split(/\s+/).map(function(ch){return '['+ch+']'}).join(' '));
+      return;
+    }
+    if(CJK_ANY.test(line) && !/^\s*\{/.test(line)){
+      line=line.replace(/　/g,' ').replace(/([㐀-鿿＀-￯、-〿\]])[ \t]+(?=[㐀-鿿＀-￯、-〿\[])/g,'$1');
+    }
+    out.push(line);
+  });
+  return out.join('\n');
+}
 function parse(text){
-  text=fixLook(text);
+  text=tidyCJK(fixLook(text));
   var meta={}, blocks=[], blk=null;
   function open(type,label,implicit){ blk={type:type,label:label||'',implicit:!!implicit,lines:[]}; blocks.push(blk); }
   var prevBlank=true;
@@ -562,12 +613,12 @@ function render(){
   sheet.innerHTML=h;
   sheet.style.fontSize=settings.size+'px';
   sheet.classList.toggle('nochords',!settings.chords);
-  document.title=title+' – Chord Sheet';
+  document.title=title+' – STWC Chord Sheet Pro';
   document.getElementById('keyOut').textContent = m.key ? tChord(m.key,steps,flats) : (steps>0?'+':'')+steps;
 }
 
 /* ---------- song list ---------- */
-function titleOf(s){ var m=s.text.match(/\{\s*(?:title|t)\s*:\s*(.*?)\s*\}/i); return m?m[1]:'Untitled'; }
+function titleOf(s){ var m=tidyCJK(s.text).match(/\{\s*(?:title|t)\s*:\s*(.*?)\s*\}/i); return m?m[1]:'Untitled'; }
 var library=[], libName='';
 function plainText(t){ return t.replace(/\{[^}]*\}/g,' ').replace(/\[[^\]]*\]/g,'').toLowerCase(); }
 function refreshList(){
@@ -786,7 +837,8 @@ function latin(str){
   }
   return o;
 }
-function pdfStr(str){ return latin(str).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
+var PDF_RASTER=false;     // Chinese and other non-Latin songs: same layout, but each page is drawn as a picture
+function pdfStr(str){ if(PDF_RASTER) return String(str).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); return latin(str).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
 
 function pairStrings(text){
   var parts=text.split(/\[([^\]]*)\]/), segs=[], i;
@@ -1058,7 +1110,9 @@ var PDF_LAST=null;
 function buildPdf(bw){
   PDF_BW=!!bw; PDF_LAST=null;
   render();                                   // refresh CTX (key, transpose, display mode)
-  if(NON_LATIN.test(fixLook(cur.text))) return imagePdf(sheetToCanvas());   // Chinese etc: the PDF fonts cannot draw it, use a picture page
+  var raster=NON_LATIN.test(fixLook(cur.text));   // Chinese etc: the PDF fonts cannot draw it, so the finished pages are drawn as pictures
+  PDF_RASTER=raster;
+  try{
   var song=parse(cur.text), plan=pdfPlan(song), L=pdfFlow(song,plan.fs,plan.pageCols);
   var PW=612, PH=792;
   var pageOps=L.pages.map(function(items,pi){
@@ -1076,6 +1130,10 @@ function buildPdf(bw){
   if(credit && pageOps.length) pageOps[pageOps.length-1].push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 30 Td ('+pdfStr(credit)+') Tj ET');
   pageOps.forEach(function(ops){ ops.push('BT /F1 6.5 Tf 0.35 0.35 0.35 rg '+L.MG+' 20 Td ('+pdfStr("For licensed use only. Public use of these songs requires a CCLI license or the copyright holder's permission.")+') Tj ET'); });
   PDF_LAST={pages:pageOps,plan:plan};
+  if(raster){
+    var cvs=pageOps.map(function(ops){ var c=document.createElement('canvas'); c.width=1224; c.height=1584; drawOps(c.getContext('2d'),ops,2,792); return c; });
+    return imagePdfPages(cvs);
+  }
   var objs=[], n=pageOps.length;
   objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
   var kids=[]; for(var i=0;i<n;i++) kids.push((6+i*2)+' 0 R');
@@ -1097,28 +1155,32 @@ function buildPdf(bw){
   var bytes=new Uint8Array(out.length);
   for(i=0;i<out.length;i++) bytes[i]=out.charCodeAt(i)&255;
   return bytes;
+  } finally { PDF_RASTER=false; }
 }
-// one-page PDF holding a picture (used when the song has letters the PDF fonts cannot draw)
-function imagePdf(canvas){
-  var b64=canvas.toDataURL('image/jpeg',0.92).split(',')[1], bin=atob(b64), jpg=new Uint8Array(bin.length), i;
-  for(i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
-  var PW=612, PH=792, M=30, sc=Math.min((PW-2*M)/canvas.width,(PH-2*M)/canvas.height);
-  var w=canvas.width*sc, h=canvas.height*sc, x=(PW-w)/2, y=PH-M-h;
-  var content='q '+w.toFixed(1)+' 0 0 '+h.toFixed(1)+' '+x.toFixed(1)+' '+y.toFixed(1)+' cm /Im0 Do Q';
-  var parts=[], size=0, offs=[];
+// PDF made of full-page pictures (one per page), used when the song has letters the PDF fonts cannot draw
+function imagePdfPages(canvases){
+  var n=canvases.length, PW=612, PH=792, parts=[], size=0, offs=[], i;
   function addStr(s){ var u=new Uint8Array(s.length); for(var j=0;j<s.length;j++) u[j]=s.charCodeAt(j)&255; parts.push(u); size+=u.length; }
   function addBin(u){ parts.push(u); size+=u.length; }
+  var jpgs=canvases.map(function(cv){
+    var bin=atob(cv.toDataURL('image/jpeg',0.92).split(',')[1]), u=new Uint8Array(bin.length);
+    for(var k=0;k<bin.length;k++) u[k]=bin.charCodeAt(k);
+    return {u:u,w:cv.width,h:cv.height};
+  });
+  var kids=[]; for(i=0;i<n;i++) kids.push((3+i*3)+' 0 R');
   addStr('%PDF-1.4\n');
   offs[1]=size; addStr('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-  offs[2]=size; addStr('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
-  offs[3]=size; addStr('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>\nendobj\n');
-  offs[4]=size; addStr('4 0 obj\n<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream\nendobj\n');
-  offs[5]=size; addStr('5 0 obj\n<< /Type /XObject /Subtype /Image /Width '+canvas.width+' /Height '+canvas.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpg.length+' >>\nstream\n');
-  addBin(jpg); addStr('\nendstream\nendobj\n');
-  var xref=size;
-  var x2='xref\n0 6\n0000000000 65535 f \n';
-  for(i=1;i<=5;i++) x2+=('0000000000'+offs[i]).slice(-10)+' 00000 n \n';
-  x2+='trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  offs[2]=size; addStr('2 0 obj\n<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+n+' >>\nendobj\n');
+  jpgs.forEach(function(j,k){
+    var pg=3+k*3, ct=pg+1, im=pg+2, content='q '+PW+' 0 0 '+PH+' 0 0 cm /Im0 Do Q';
+    offs[pg]=size; addStr(pg+' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /XObject << /Im0 '+im+' 0 R >> >> /Contents '+ct+' 0 R >>\nendobj\n');
+    offs[ct]=size; addStr(ct+' 0 obj\n<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream\nendobj\n');
+    offs[im]=size; addStr(im+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+j.w+' /Height '+j.h+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+j.u.length+' >>\nstream\n');
+    addBin(j.u); addStr('\nendstream\nendobj\n');
+  });
+  var total=3+n*3, xref=size, x2='xref\n0 '+total+'\n0000000000 65535 f \n';
+  for(i=1;i<total;i++) x2+=('0000000000'+offs[i]).slice(-10)+' 00000 n \n';
+  x2+='trailer\n<< /Size '+total+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
   addStr(x2);
   var out=new Uint8Array(size), pos=0;
   parts.forEach(function(u){ out.set(u,pos); pos+=u.length; });
@@ -1192,13 +1254,14 @@ function savePdf(bw){
 /* ---------- print preview ---------- */
 var CP1252={0x80:'€',0x85:'…',0x91:'‘',0x92:'’',0x93:'“',0x94:'”',0x95:'•',0x96:'–',0x97:'—'};
 function pdfUnstr(s){ return s.replace(/\\([()\\])/g,'$1').replace(/[\u0080-\u009f]/g,function(c){return CP1252[c.charCodeAt(0)]||c}); }
+var PAGE_FONT='Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
 function drawOps(ctx,ops,sc,PH){
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
   ops.forEach(function(o){
     var m=o.match(/^BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) ([\d.]+) rg ([\d.-]+) ([\d.-]+) Td \(([\s\S]*)\) Tj ET$/);
     if(!m) return;
     var size=parseFloat(m[2])*sc;
-    ctx.font=(m[1]==='F3'?'italic ':'')+'bold '+size.toFixed(2)+'px Helvetica, Arial, sans-serif';
+    ctx.font=(m[1]==='F3'?'italic ':'')+'bold '+size.toFixed(2)+'px '+PAGE_FONT;
     ctx.fillStyle='rgb('+Math.round(m[3]*255)+','+Math.round(m[4]*255)+','+Math.round(m[5]*255)+')';
     ctx.textBaseline='alphabetic';
     ctx.fillText(pdfUnstr(m[8]),parseFloat(m[6])*sc,(PH-parseFloat(m[7]))*sc);
@@ -1817,26 +1880,47 @@ function sheetToCanvas(){
   return out;
 }
 function saveImage(kind){
-  var cv;
-  try{ cv=sheetToCanvas(); }catch(e){ toast('Could not make the picture: '+e.message); return; }
-  var name=safeName(), type=kind==='png'?'image/png':'image/jpeg', ext=kind==='png'?'.png':'.jpg';
-  cv.toBlob(function(blob){
-    if(!blob){ toast('Could not make the picture.'); return; }
-    var file=null;
-    try{ file=new File([blob],name+ext,{type:type}); }catch(e){}
-    if(IS_TOUCH_DEVICE && file && navigator.canShare && navigator.canShare({files:[file]})){
-      navigator.share({files:[file],title:name}).catch(function(){});
-      return;
-    }
-    function dl(){
-      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name+ext;
-      document.body.appendChild(a); a.click();
-      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
-      toast('Saved '+name+ext+' to your Downloads.');
-    }
-    if(CAN_PICK_SAVE){ smartSave(blob,name+ext,type,ext).then(function(done){ if(!done) dl(); }); return; }
-    dl();
-  }, type, 0.92);
+  var name=safeName(), type=kind==='png'?'image/png':'image/jpeg', ext=kind==='png'?'.png':'.jpg', canvases=[];
+  try{
+    buildPdf(false);                                  // same page layout as the PDF (also refreshes key and number/letter mode)
+    if(PDF_LAST){
+      var sc=2.6;                                     // letter page at about 1590 x 2060 pixels: sharp on an iPad
+      PDF_LAST.pages.forEach(function(ops){
+        var c=document.createElement('canvas'); c.width=Math.round(612*sc); c.height=Math.round(792*sc);
+        drawOps(c.getContext('2d'),ops,sc,792); canvases.push(c);
+      });
+    } else canvases.push(sheetToCanvas());            // Chinese and other special letters: one picture
+  }catch(e){ toast('Could not make the picture: '+e.message); return; }
+  var items=[], left=canvases.length;
+  canvases.forEach(function(cv,i){
+    var nm=name+(canvases.length>1?' - page '+(i+1):'')+ext;
+    cv.toBlob(function(blob){
+      items[i]=blob?{name:nm,blob:blob}:null;
+      if(--left===0) finishImages(items.filter(Boolean),type,ext,name);
+    },type,0.92);
+  });
+}
+function finishImages(items,type,ext,name){
+  if(!items.length){ toast('Could not make the picture.'); return; }
+  var files=[];
+  try{ files=items.map(function(it){ return new File([it.blob],it.name,{type:type}); }); }catch(e){}
+  if(IS_TOUCH_DEVICE && files.length && navigator.canShare && navigator.canShare({files:files})){
+    navigator.share({files:files,title:name}).catch(function(){});
+    return;
+  }
+  function dl(){
+    items.forEach(function(it,i){
+      setTimeout(function(){
+        var a=document.createElement('a'); a.href=URL.createObjectURL(it.blob); a.download=it.name;
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      },i*350);
+    });
+    toast(items.length>1?'Saved '+items.length+' pictures to your Downloads.':'Saved '+items[0].name+' to your Downloads.');
+  }
+  if(items.length===1 && CAN_PICK_SAVE){ smartSave(items[0].blob,items[0].name,type,ext).then(function(done){ if(!done) dl(); }); return; }
+  if(items.length>1 && CAN_PICK_DIR){ saveInFolder(items).then(function(done){ if(!done) dl(); }); return; }
+  dl();
 }
 $('exportBtn').onclick=function(e){
   e.stopPropagation();
